@@ -80,11 +80,8 @@ export function Header() {
               aria-label={`Open basket, ${count} items`}
               className="flex h-11 items-center gap-1.5 text-[0.95rem]"
             >
-              <IconBasket className="size-[22px] sm:hidden" />
-              <span className="hidden sm:inline">Basket</span>
-              <span className="tabular-nums opacity-70">
-                <span className="hidden sm:inline">(</span>{hydrated ? count : 0}<span className="hidden sm:inline">)</span>
-              </span>
+              <IconBasket className="size-[22px]" />
+              <span className="min-w-[1ch] tabular-nums">{hydrated ? count : 0}</span>
             </button>
             <button onClick={() => setMenu(true)} aria-label="Open menu" aria-expanded={menu} className="-mr-2 grid size-11 place-items-center lg:hidden">
               <IconMenu className="size-6" />
