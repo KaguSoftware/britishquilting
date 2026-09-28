@@ -55,7 +55,7 @@ export function LoginForm({ next, initialError, notice }: { next: string; initia
             aria-selected={mode === m}
             onClick={() => setMode(m)}
             className={cn(
-              "flex h-9 items-center justify-center gap-2 rounded-xs text-sm transition-[background-color,color,box-shadow] duration-300 ease-(--ease-silk)",
+              "flex h-11 items-center md:h-9 justify-center gap-2 rounded-xs text-sm transition-[background-color,color,box-shadow] duration-300 ease-(--ease-silk)",
               mode === m ? "bg-aubergine-800 text-cream-50 shadow-soft" : "text-ink-soft hover:text-aubergine-800",
             )}
           >

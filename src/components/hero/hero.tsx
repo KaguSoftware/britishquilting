@@ -65,6 +65,8 @@ export function Hero({ categories }: { categories: HeroCategory[] }) {
         tl.fromTo(el, { opacity: 0, y: 40, clipPath: "inset(0 0 100% 0)" }, { opacity: 1, y: 0, clipPath: "inset(0 0 0% 0)", duration: 0.04 }, a)
           .to(el, { opacity: 0, y: -40, duration: 0.03 }, b - 0.03);
       });
+      tl.fromTo("[data-chapter-scrim]", { opacity: 0 }, { opacity: 1, duration: 0.04 }, 0.36)
+        .to("[data-chapter-scrim]", { opacity: 0, duration: 0.04 }, 0.74);
       tl.fromTo("[data-stitch]", { scaleX: 0 }, { scaleX: 1, duration: 0.3 }, 0.4);
       tl.fromTo("[data-hero-cards] > *",
         { opacity: 0, y: 80, rotateX: -12 },
@@ -120,8 +122,9 @@ export function Hero({ categories }: { categories: HeroCategory[] }) {
           </span>
         </div>
 
-        {/* chapters */}
-        <div className="pointer-events-none absolute inset-0 flex items-end pb-[12vh] md:items-center md:pb-0">
+        {/* chapters: on phones the copy sits over the cloth, so a scrim keeps it legible */}
+        <div data-chapter-scrim aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[62svh] bg-[linear-gradient(to_top,rgb(28_10_36/.92)_0%,rgb(28_10_36/.78)_45%,transparent_100%)] opacity-0 md:hidden" />
+        <div className="pointer-events-none absolute inset-0 flex items-end pb-[max(12vh,calc(env(safe-area-inset-bottom)+4rem))] md:items-center md:pb-0">
           {CHAPTERS.map((c, i) => (
             <div
               key={c.eyebrow}
@@ -132,7 +135,7 @@ export function Hero({ categories }: { categories: HeroCategory[] }) {
                 {String(i + 1).padStart(2, "0")} · {c.eyebrow}
               </p>
               <h2 className="font-display mt-3 text-[clamp(2rem,4vw,3.4rem)] leading-[1.02]">{c.title}</h2>
-              <p className="mt-4 max-w-sm text-cream-100/75 md:inline-block">{c.body}</p>
+              <p className="mt-4 max-w-sm text-cream-100/90 md:inline-block md:text-cream-100/75">{c.body}</p>
             </div>
           ))}
         </div>

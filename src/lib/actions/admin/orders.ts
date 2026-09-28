@@ -74,17 +74,11 @@ export async function addTracking(input: z.input<typeof trackingSchema>): Promis
     data: { carrier, tracking_number: trackingNumber, tracking_url: url },
     actor_id: viewer.id,
   });
-  if (notify) {
-    try {
-      await sendDispatched(orderId);
-      await db.from("order_events").insert({ order_id: orderId, kind: "email", message: "Dispatch email sent to customer", actor_id: viewer.id, visible_to_customer: false });
-    } catch (e) {
-      console.error("dispatch email", e);
-    }
-  }
+  // sendDispatched never throws and logs its own staff-only email event.
+  const emailed = notify ? await sendDispatched(orderId).catch(() => false) : false;
   await audit(db, viewer.id, "order.shipped", "order", orderId, { carrier, trackingNumber });
   refresh(orderId);
-  return ok(undefined, notify ? "Marked as sent. The customer has been emailed." : "Marked as sent.");
+  return ok(undefined, emailed ? "Marked as sent. The customer has been emailed." : notify ? "Marked as sent, but the dispatch email couldn't be sent." : "Marked as sent.");
 }
 
 export async function markInvoicePaid(orderId: string, reference?: string): Promise<ActionResult> {

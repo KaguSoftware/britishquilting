@@ -116,7 +116,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             <ol className="relative space-y-5 border-l border-ink/15 pl-5">
               {(events ?? []).map((e) => (
                 <li key={e.id} className="relative">
-                  <span className={"absolute -left-[25px] top-1.5 size-2.5 rounded-full border-2 border-cream-50 " + (e.kind === "refund" ? "bg-danger" : e.kind === "note" ? "bg-stone-500" : "bg-aubergine-700")} />
+                  <span className={"absolute -left-[25px] top-1.5 size-2.5 rounded-full border-2 border-cream-50 " + (e.kind === "refund" || e.kind === "stock_short" ? "bg-danger" : e.kind === "note" ? "bg-stone-500" : "bg-aubergine-700")} />
                   <p className="text-[0.95rem]">{e.message ?? e.kind}</p>
                   <p className="text-xs text-stone-500">
                     {formatDateTime(e.created_at)}

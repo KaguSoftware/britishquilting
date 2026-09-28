@@ -30,7 +30,12 @@ export async function quoteCart(raw: QuoteInput) {
         name: r.name,
         carrier: r.carrier,
         estimated_days: r.estimated_days,
-        price: i === 0 && settings.free_shipping_threshold_pence != null && q.subtotal - q.discount >= settings.free_shipping_threshold_pence ? 0 : r.price_pence,
+        price:
+          i === 0 &&
+          (discount?.kind === "free_shipping" ||
+            (settings.free_shipping_threshold_pence != null && q.subtotal - q.discount >= settings.free_shipping_threshold_pence))
+            ? 0
+            : r.price_pence,
       })),
       selectedRateId: q.selectedRate?.id ?? null,
       freeThreshold: settings.free_shipping_threshold_pence,

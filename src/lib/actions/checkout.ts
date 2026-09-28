@@ -211,6 +211,16 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
         await db.from("orders").delete().eq("id", created.id);
         throw itemsError;
       }
+      if (input.provider === "invoice") {
+        // Reserve stock atomically (row locks, all or nothing) before the order is confirmed.
+        const { error: stockError } = await db.rpc("reserve_order_stock", { p_order_id: created.id });
+        if (stockError) {
+          await db.from("orders").delete().eq("id", created.id);
+          if (stockError.message?.includes("insufficient_stock"))
+            return { ok: false, error: "Sorry, some items in your basket have just sold out. Please review your basket.", requote: true };
+          throw stockError;
+        }
+      }
       await db.from("order_events").insert({
         order_id: created.id,
         kind: "created",
@@ -219,7 +229,6 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
       });
 
       if (isInvoice) {
-        await deductStock(created.id);
         await db.from("order_events").insert({
           order_id: created.id,
           kind: "status",
@@ -282,32 +291,6 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
 
 function successUrl(o: { id: string; access_token: string }) {
   return `/checkout/success?order=${o.id}&token=${o.access_token}`;
-}
-
-/** Invoice orders ship before payment, so stock is reserved at placement. */
-async function deductStock(orderId: string) {
-  const db = createAdminClient();
-  const { data: items } = await db.from("order_items").select("product_id, sale_mode, quantity, length_m, is_swatch").eq("order_id", orderId);
-  const usage = new Map<string, number>();
-  for (const i of items ?? []) {
-    if (i.is_swatch || !i.product_id) continue;
-    const qty = i.sale_mode === "unit" ? i.quantity : Number(i.length_m ?? 0) * i.quantity;
-    usage.set(i.product_id, (usage.get(i.product_id) ?? 0) + qty);
-  }
-  for (const [id, qty] of usage) {
-    // Optimistic concurrency: retry if another order changed the row between read and write.
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const { data: p } = await db.from("products").select("stock_qty, track_stock").eq("id", id).maybeSingle();
-      if (!p?.track_stock) break;
-      const { data: updated } = await db
-        .from("products")
-        .update({ stock_qty: Math.max(0, Number(p.stock_qty) - qty) })
-        .eq("id", id)
-        .eq("stock_qty", p.stock_qty)
-        .select("id");
-      if (updated?.length) break;
-    }
-  }
 }
 
 async function incrementDiscountUse(code: string | null) {

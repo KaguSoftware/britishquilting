@@ -118,6 +118,13 @@ function StockCell({ p, unit }: { p: ProductRow; unit: string }) {
   const { run, pending } = useAction();
   const [value, setValue] = useState(String(p.stock_qty));
   const [saved, setSaved] = useState(p.stock_qty);
+  // Follow server changes (undo, orders, other staff) after router.refresh().
+  const [serverQty, setServerQty] = useState(p.stock_qty);
+  if (p.stock_qty !== serverQty) {
+    setServerQty(p.stock_qty);
+    setSaved(p.stock_qty);
+    setValue(String(p.stock_qty));
+  }
   const n = Number(value);
   const dirty = value !== "" && Number.isFinite(n) && n !== saved;
   const low = saved > 0 && saved <= p.low_stock_threshold;

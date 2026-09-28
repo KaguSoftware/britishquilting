@@ -14,6 +14,7 @@ export type AuthState = {
   message?: string;
   fieldErrors?: Record<string, string[] | undefined>;
   email?: string;
+  fullName?: string;
 } | null;
 
 async function origin() {
@@ -69,7 +70,7 @@ export async function signUp(_: AuthState, form: FormData): Promise<AuthState> {
       marketing: form.get("marketing") === "on",
     });
   const typedEmail = String(form.get("email") ?? "");
-  if (!parsed.success) return { fieldErrors: z.flattenError(parsed.error).fieldErrors, email: typedEmail };
+  if (!parsed.success) return { fieldErrors: z.flattenError(parsed.error).fieldErrors, email: typedEmail, fullName: String(form.get("fullName") ?? "") };
 
   const next = safeNext(form.get("next"));
   const supabase = await createClient();
@@ -81,11 +82,11 @@ export async function signUp(_: AuthState, form: FormData): Promise<AuthState> {
       emailRedirectTo: callbackUrl(await origin(), next),
     },
   });
-  if (error) return { message: friendlyAuthError(error), email: typedEmail };
+  if (error) return { message: friendlyAuthError(error), email: typedEmail, fullName: String(form.get("fullName") ?? "") };
 
   // Supabase hides existing accounts behind an empty identities list.
   if (data.user && data.user.identities?.length === 0) {
-    return { message: friendlyAuthError({ code: "user_already_exists" }), email: typedEmail };
+    return { message: friendlyAuthError({ code: "user_already_exists" }), email: typedEmail, fullName: String(form.get("fullName") ?? "") };
   }
 
   if (data.user && parsed.data.marketing) {

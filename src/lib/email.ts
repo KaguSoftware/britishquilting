@@ -30,7 +30,7 @@ export async function sendEmail({ to, subject, react, replyTo }: { to: string | 
     const key = process.env.RESEND_API_KEY;
     if (!key) {
       console.info(`[email] (RESEND_API_KEY not set) to=${String(to)} subject="${subject}"`);
-      return true;
+      return false; // nothing was actually sent
     }
     resend ??= new Resend(key);
     const html = await render(react);

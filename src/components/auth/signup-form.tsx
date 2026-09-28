@@ -40,7 +40,7 @@ export function SignupForm({ next }: { next: string }) {
         {state?.message && <FormMessage>{state.message}</FormMessage>}
 
         <Field id={nameId} label="Full name" error={fe?.fullName}>
-          <Input id={nameId} name="fullName" autoComplete="name" required aria-invalid={Boolean(fe?.fullName) || undefined} aria-describedby={`${nameId}-msg`} />
+          <Input key={state?.fullName ?? "n"} id={nameId} name="fullName" autoComplete="name" defaultValue={state?.fullName ?? ""} required aria-invalid={Boolean(fe?.fullName) || undefined} aria-describedby={`${nameId}-msg`} />
         </Field>
         <Field id={emailId} label="Email address" error={fe?.email}>
           <Input

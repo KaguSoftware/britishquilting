@@ -7,9 +7,10 @@ import { ProductCard } from "@/components/shop/product-card";
 import { ProductGallery } from "@/components/shop/product-gallery";
 import { PurchasePanel } from "@/components/shop/purchase-panel";
 import { ReviewForm } from "@/components/shop/review-form";
+import { WishlistToggle } from "@/components/shop/wishlist-toggle";
 import { Accordion, Breadcrumbs, Stars } from "@/components/shop/bits";
 import { getViewer } from "@/lib/data/catalog";
-import { getCategories, getListProducts, getOwnReview, getProduct, getReviews, getTradePrice } from "@/lib/data/shop";
+import { getCategories, getListProducts, getOwnReview, getProduct, getReviews, getTradePrice, isWishlisted } from "@/lib/data/shop";
 import { formatMetres, siteUrl, storageUrl } from "@/lib/utils";
 
 export async function generateMetadata({ params }: PageProps<"/product/[slug]">): Promise<Metadata> {
@@ -32,9 +33,10 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
   if (!p) notFound();
 
   const [viewer, reviews, categories, all] = await Promise.all([getViewer().catch(() => null), getReviews(p.id), getCategories(), getListProducts()]);
-  const [tradePrice, ownReview] = await Promise.all([
+  const [tradePrice, ownReview, saved] = await Promise.all([
     viewer?.isTrade ? getTradePrice(p.id) : Promise.resolve(null),
     viewer ? getOwnReview(p.id, viewer.id) : Promise.resolve(null),
+    viewer ? isWishlisted(p.id, viewer.id) : Promise.resolve(null),
   ]);
   const category = categories.find((c) => c.id === p.category_id) ?? null;
   const images = [...(p.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
@@ -141,6 +143,10 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
               image: images[0]?.storage_path ? storageUrl(images[0].storage_path) : null,
             }}
           />
+
+          <div className="mt-4">
+            <WishlistToggle productId={p.id} saved={saved} next={`/product/${p.slug}`} />
+          </div>
 
           {viewer && !viewer.isTrade && (
             <p className="mt-5 text-sm text-ink-soft">

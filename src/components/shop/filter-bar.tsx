@@ -160,7 +160,7 @@ export function FilterBar({ facets, count, total }: { facets: Facets; count: num
             <select
               value={sort}
               onChange={(e) => set("sort", e.target.value === "featured" ? null : e.target.value)}
-              className="min-h-11 appearance-none border border-stone-300 bg-cream-50 py-2 pl-4 pr-10 text-sm transition-colors hover:border-aubergine-700"
+              className="min-h-11 appearance-none border border-stone-300 bg-cream-50 py-2 pl-4 pr-10 text-base transition-colors md:text-sm hover:border-aubergine-700"
             >
               {SORTS.map(([v, l]) => (
                 <option key={v} value={v}>{l}</option>

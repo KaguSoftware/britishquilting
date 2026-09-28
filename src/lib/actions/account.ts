@@ -229,3 +229,16 @@ export async function applyForTrade(_: FormState, form: FormData): Promise<FormS
   revalidatePath("/account", "layout");
   return { ok: true, message: "Application received. We review every account personally, usually within one working day." };
 }
+
+export async function toggleWishlist(productId: string, save: boolean): Promise<{ ok?: boolean; message?: string; saved?: boolean }> {
+  const { supabase, user } = await authed();
+  if (!user) return { ok: false, message: "Please sign in to save items." };
+  if (!z.uuid().safeParse(productId).success) return { message: "Item not found." };
+  const { error } = save
+    ? await supabase.from("wishlist_items").upsert({ user_id: user.id, product_id: productId }, { onConflict: "user_id,product_id", ignoreDuplicates: true })
+    : await supabase.from("wishlist_items").delete().eq("user_id", user.id).eq("product_id", productId);
+  if (error) return { message: "We couldn't update your wishlist." };
+  revalidatePath("/account/wishlist");
+  revalidatePath("/account");
+  return { ok: true, saved: save, message: save ? "Saved to your wishlist." : "Removed from your wishlist." };
+}

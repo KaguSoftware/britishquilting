@@ -23,10 +23,10 @@ export function Footer() {
             {COLS.map((c) => (
               <div key={c.title}>
                 <p className="eyebrow text-gold-300">{c.title}</p>
-                <ul className="mt-5 space-y-3">
+                <ul className="mt-3 md:mt-5 md:space-y-3">
                   {c.links.map(([label, href]) => (
                     <li key={href}>
-                      <Link href={href} className="text-sm text-cream-100/75 transition-colors hover:text-cream-50">
+                      <Link href={href} className="inline-flex min-h-11 items-center text-[0.95rem] text-cream-100/75 md:min-h-0 md:text-sm transition-colors hover:text-cream-50">
                         {label}
                       </Link>
                     </li>
@@ -39,9 +39,9 @@ export function Footer() {
         <div className="stitch mt-16 opacity-40" />
         <div className="mt-8 flex flex-col gap-4 text-xs text-cream-100/50 md:flex-row md:items-center md:justify-between">
           <p>© {new Date().getFullYear()} Intermode Limited, trading as British Quilting · London · Family-owned since 1990</p>
-          <p className="flex items-center gap-3">
-            <span>Secure checkout</span>
-            <span aria-hidden>·</span>
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 pb-[env(safe-area-inset-bottom)]">
+            <span className="whitespace-nowrap">Secure checkout</span>
+            <span aria-hidden className="hidden md:inline">·</span>
             <span>Visa · Mastercard · Amex · Apple Pay · Google Pay · PayPal</span>
           </p>
         </div>

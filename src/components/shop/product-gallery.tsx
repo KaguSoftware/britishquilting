@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useRef, useState } from "react";
 import { cn, storageUrl } from "@/lib/utils";
+import { FabricPlaceholder } from "./product-card";
 
 type Img = { storage_path: string; alt: string | null };
 
@@ -43,11 +44,8 @@ export function ProductGallery({ images, hex, name, label }: { images: Img[]; he
           <Image src={src} alt={img!.alt ?? name} fill priority sizes="(min-width: 768px) 55vw, 100vw" className="object-cover" />
         ) : (
           <>
-            <div aria-hidden className="absolute inset-0" style={weave(c)} />
-            {/* soft drape light + selvedge */}
-            <div aria-hidden className="absolute inset-0 bg-[linear-gradient(100deg,transparent_0%,rgb(255_255_255/.22)_18%,transparent_32%,rgb(0_0_0/.06)_48%,transparent_60%,rgb(255_255_255/.16)_74%,transparent_90%)]" />
+            <FabricPlaceholder hex={c} name={name} />
             <div aria-hidden className="absolute inset-y-0 right-0 w-5 bg-[repeating-linear-gradient(180deg,rgb(0_0_0/.08)_0_1px,transparent_1px_4px)] opacity-70" />
-            <div aria-hidden className="absolute inset-0 bg-[radial-gradient(120%_90%_at_25%_5%,rgb(255_255_255/.3),transparent_55%),linear-gradient(180deg,transparent_65%,rgb(0_0_0/.1))]" />
             <span className="sr-only">{name}, colour sample. Photography coming soon.</span>
           </>
         )}

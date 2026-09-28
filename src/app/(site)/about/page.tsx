@@ -23,7 +23,7 @@ export default function AboutPage() {
     <>
       <PageHeader
         eyebrow="Since 1990"
-        title={<SplitText tag="span" text="Three decades at the cutting table." splitType="words" delay={60} duration={0.9} className="!block" />}
+        title={<SplitText tag="span" text="Three decades at the cutting table." splitType="words" delay={60} duration={0.9} textAlign="left" className="!block" />}
         lede="British Quilting is a family business in London. We supply the layers you never see and always notice: the linings, interlinings and papers that make curtains, blinds and upholstery hang, wear and last properly."
         crumbs={[{ href: "/", label: "Home" }, { label: "Our story" }]}
       />

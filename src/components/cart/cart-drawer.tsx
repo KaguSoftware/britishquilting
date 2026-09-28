@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { FabricPlaceholder } from "@/components/shop/product-card";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { AnimatePresence, motion } from "motion/react";
@@ -14,14 +15,17 @@ export function CartDrawer() {
   const [q, setQ] = useState<CartQuote | null>(null);
   const [, startTransition] = useTransition();
   const panel = useRef<HTMLDivElement>(null);
+  const seq = useRef(0);
 
   // Re-quote from the server whenever the basket changes while open.
   useEffect(() => {
     if (!open || items.length === 0) return;
     const lines = items.map(({ productId, lengthM, quantity, isSwatch }) => ({ productId, lengthM, quantity, isSwatch }));
+    const mine = ++seq.current;
     startTransition(async () => {
       const res = await quoteCart({ lines });
-      if (res.ok) setQ(res);
+      // Ignore responses that arrive after a newer basket change.
+      if (res.ok && mine === seq.current) setQ(res);
     });
   }, [open, items]);
 
@@ -67,7 +71,7 @@ export function CartDrawer() {
           >
             <div className="flex items-center justify-between px-6 py-5">
               <h2 className="font-display text-3xl">Your basket</h2>
-              <button onClick={() => setOpen(false)} aria-label="Close" className="grid size-10 place-items-center rounded-full hover:bg-cream-200">
+              <button onClick={() => setOpen(false)} aria-label="Close" className="-mr-2 grid size-11 place-items-center rounded-full hover:bg-cream-200">
                 <X className="size-5" />
               </button>
             </div>
@@ -117,7 +121,7 @@ export function CartDrawer() {
                         className="flex gap-4 py-5"
                       >
                         <div className="relative size-20 shrink-0 overflow-hidden bg-cream-200">
-                          {i.image && <Image src={i.image} alt="" fill sizes="80px" className="object-cover" />}
+                          {i.image ? <Image src={i.image} alt="" fill sizes="80px" className="object-cover" /> : <FabricPlaceholder hex={null} name={i.name} />}
                         </div>
                         <div className="flex min-w-0 flex-1 flex-col">
                           <div className="flex justify-between gap-3">

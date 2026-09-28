@@ -100,13 +100,13 @@ export function MobileMenu({
           ))}
         </ul>
 
-        <div data-foot className="mt-auto space-y-4 pt-12 text-sm text-ink-soft">
-          <div className="flex gap-6">
-            <Link href="/account" onClick={onClose} tabIndex={open ? 0 : -1} className="text-ink underline-offset-4 hover:underline">Your account</Link>
-            <Link href="/track" onClick={onClose} tabIndex={open ? 0 : -1} className="text-ink underline-offset-4 hover:underline">Track an order</Link>
+        <div data-foot className="mt-auto space-y-1 pt-12 pb-[env(safe-area-inset-bottom)] text-[0.95rem] text-ink-soft">
+          <div className="flex gap-8">
+            <Link href="/account" onClick={onClose} tabIndex={open ? 0 : -1} className="inline-flex min-h-11 items-center text-ink underline-offset-4 hover:underline">Your account</Link>
+            <Link href="/track" onClick={onClose} tabIndex={open ? 0 : -1} className="inline-flex min-h-11 items-center text-ink underline-offset-4 hover:underline">Track an order</Link>
           </div>
           <p>
-            07710 131416 · <a href="mailto:mustafa@britishquilting.com" className="underline-offset-4 hover:underline">mustafa@britishquilting.com</a>
+            <a href="tel:+447710131416" className="inline-flex min-h-11 items-center underline-offset-4 hover:underline">07710 131416</a> · <a href="mailto:mustafa@britishquilting.com" className="inline-flex min-h-11 items-center underline-offset-4 hover:underline">mustafa@britishquilting.com</a>
           </p>
         </div>
       </nav>

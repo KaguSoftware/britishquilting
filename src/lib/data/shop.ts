@@ -225,3 +225,13 @@ export function applyFilters(products: ListProduct[], f: ShopFilters) {
   }[f.sort];
   return out.sort(by);
 }
+
+export async function isWishlisted(productId: string, userId: string) {
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("wishlist_items")
+    .select("product_id", { count: "exact", head: true })
+    .eq("product_id", productId)
+    .eq("user_id", userId);
+  return (count ?? 0) > 0;
+}
