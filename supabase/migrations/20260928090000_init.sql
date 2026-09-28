@@ -1,8 +1,8 @@
 -- British Quilting, core schema
 -- Money is stored in integer pence. Lengths are stored in metres, numeric(10,2).
 
-create extension if not exists "pgcrypto";
-create extension if not exists "citext";
+create extension if not exists "pgcrypto" with schema extensions;
+create extension if not exists "citext" with schema extensions;
 
 -- ─────────────────────────────────────────── enums
 create type public.user_role     as enum ('customer', 'trade', 'staff', 'owner');
@@ -22,7 +22,7 @@ language plpgsql as $$ begin new.updated_at = now(); return new; end $$;
 -- ─────────────────────────────────────────── profiles
 create table public.profiles (
   id uuid primary key references auth.users on delete cascade,
-  email citext,
+  email extensions.citext,
   full_name text,
   phone text,
   role public.user_role not null default 'customer',
@@ -226,7 +226,7 @@ insert into public.store_settings (id) values (1);
 -- ─────────────────────────────────────────── discounts
 create table public.discount_codes (
   id uuid primary key default gen_random_uuid(),
-  code citext unique not null,
+  code extensions.citext unique not null,
   kind public.discount_kind not null,
   value int not null default 0,          -- percent (0–100) or pence
   min_subtotal_pence int not null default 0,
@@ -246,7 +246,7 @@ create table public.orders (
   id uuid primary key default gen_random_uuid(),
   number int unique not null default nextval('public.order_number_seq'),
   user_id uuid references public.profiles on delete set null,
-  email citext not null,
+  email extensions.citext not null,
   status public.order_status not null default 'pending',
   payment_provider public.payment_provider,
   payment_ref text,
@@ -266,7 +266,7 @@ create table public.orders (
   customer_note text,
   internal_note text,
   -- random token lets guests view their order without logging in
-  access_token text not null default encode(gen_random_bytes(18), 'hex'),
+  access_token text not null default encode(extensions.gen_random_bytes(18), 'hex'),
   paid_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -314,7 +314,7 @@ create table public.discount_redemptions (
   id uuid primary key default gen_random_uuid(),
   discount_id uuid not null references public.discount_codes on delete cascade,
   order_id uuid not null references public.orders on delete cascade,
-  email citext not null,
+  email extensions.citext not null,
   created_at timestamptz not null default now()
 );
 
@@ -343,7 +343,7 @@ create table public.wishlist_items (
 create table public.stock_alerts (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products on delete cascade,
-  email citext not null,
+  email extensions.citext not null,
   notified_at timestamptz,
   created_at timestamptz not null default now(),
   unique (product_id, email)
@@ -351,7 +351,7 @@ create table public.stock_alerts (
 
 create table public.newsletter_subscribers (
   id uuid primary key default gen_random_uuid(),
-  email citext unique not null,
+  email extensions.citext unique not null,
   source text,
   unsubscribed_at timestamptz,
   created_at timestamptz not null default now()
