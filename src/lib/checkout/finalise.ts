@@ -1,24 +1,23 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendLowStock, sendOrderConfirmation } from "@/lib/email";
+import { revalidateStorefront } from "@/lib/orders/revalidate";
 
 type Provider = "stripe" | "paypal" | "invoice";
 
 /**
- * Marks an order paid exactly once (finalise_paid_order is idempotent and locks the row),
- * records the discount redemption, emails the customer and alerts staff to low stock.
- * Safe to call from the webhook, the PayPal capture route and the success page concurrently.
+ * Marks an order paid exactly once (finalise_paid_order is idempotent, locks the row and
+ * reports whether this call did the transition), records the discount redemption, emails
+ * the customer and alerts staff to low stock. Safe to call from the webhook, the PayPal
+ * capture route and the success page concurrently: only the winning call sends email.
  */
 export async function finaliseOrder(orderId: string, provider: Provider, ref: string) {
   const db = createAdminClient();
-  const { data: before } = await db.from("orders").select("status").eq("id", orderId).maybeSingle();
-  if (!before) throw new Error(`order ${orderId} not found`);
-  const wasOpen = before.status === "pending" || before.status === "awaiting_payment";
-
   const { data: order, error } = await db.rpc("finalise_paid_order", { p_order_id: orderId, p_provider: provider, p_ref: ref });
   if (error) throw error;
-  if (!wasOpen) return order;
+  if (!order?.transitioned) return order;
 
+  revalidateStorefront();
   await afterCommit(orderId, order?.discount_code ?? null, order?.email ?? null);
   await sendOrderConfirmation(orderId);
   return order;

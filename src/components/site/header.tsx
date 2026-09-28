@@ -43,7 +43,7 @@ export function Header() {
     <>
       <header
         className={cn(
-          "fixed inset-x-0 top-0 z-50 transition-[background-color,color,border-color] duration-500 ease-(--ease-silk)",
+          "fixed inset-x-0 top-[var(--announce-offset,0px)] z-50 transition-[background-color,color,border-color] duration-500 ease-(--ease-silk)",
           overHero ? "border-b border-transparent bg-transparent text-cream-50" : "border-b border-stone-300 bg-cream-100 text-ink",
         )}
       >

@@ -17,7 +17,7 @@ import type { ProductForm } from "./product-form";
 
 const MODES = {
   metre: { label: "By the metre", unit: "per metre", explain: "Customers type the length they need and you cut it from the roll. Stock is counted in metres." },
-  roll: { label: "By the roll", unit: "per roll", explain: "Customers buy whole rolls. Stock is counted in metres, so each roll sold takes its length off." },
+  roll: { label: "By the roll", unit: "per roll", explain: "Customers buy whole rolls. Stock is counted in whole rolls, so each roll sold takes one off." },
   unit: { label: "Each", unit: "each", explain: "For things sold as single items, like packs, tapes or tools. Stock is counted in items." },
 } as const;
 

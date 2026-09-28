@@ -15,11 +15,13 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { db } = await staffDb();
-  const [{ data: order }, { data: items }, { data: events }, { data: shipments }] = await Promise.all([
+  const [{ data: order }, { data: items }, { data: events }, { data: shipments }, { data: refunds }, { data: previous }] = await Promise.all([
     db.from("orders").select("*").eq("id", id).maybeSingle(),
     db.from("order_items").select("*").eq("order_id", id),
     db.from("order_events").select("*, actor:profiles(full_name, email)").eq("order_id", id).order("created_at", { ascending: false }),
     db.from("shipments").select("*").eq("order_id", id).order("shipped_at", { ascending: false }),
+    db.from("order_refunds").select("*, actor:profiles(full_name, email)").eq("order_id", id).order("created_at", { ascending: true }),
+    db.rpc("order_previous_status", { p_order_id: id }),
   ]);
   if (!order) notFound();
   const { data: profile } = order.user_id ? await db.from("profiles").select("id, full_name, phone, company_name").eq("id", order.user_id).maybeSingle() : { data: null };
@@ -55,12 +57,24 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
           id: order.id,
           number: order.number,
           status: order.status,
+          previous: (previous as OrderStatus | null) ?? null,
           fulfilment: order.fulfilment,
           payment_provider: order.payment_provider,
           paid_at: order.paid_at,
           total_pence: order.total_pence,
+          refunded_pence: order.refunded_pence ?? 0,
           email: order.email,
         }}
+        items={(items ?? []).map((i) => ({
+          id: i.id,
+          name: i.name,
+          sale_mode: i.sale_mode,
+          is_swatch: i.is_swatch,
+          length_m: i.length_m == null ? null : Number(i.length_m),
+          quantity: i.quantity,
+          line_total_pence: i.line_total_pence,
+          product_id: i.product_id,
+        }))}
       />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.5fr_1fr]">
@@ -209,6 +223,39 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               {order.payment_ref && <Row label="Reference" value={<span className="break-all font-mono text-xs">{order.payment_ref}</span>} />}
             </dl>
           </Card>
+
+          {(refunds ?? []).length > 0 && (
+            <Card title="Refunds" description={`${formatPence(order.refunded_pence ?? 0)} of ${formatPence(order.total_pence)} returned`} bodyClassName="p-0">
+              <ol className="divide-y divide-ink/10">
+                {refunds!.map((r, n) => (
+                  <li key={r.id} className="grid grid-cols-[auto_1fr_auto] gap-x-3 px-5 py-3.5 text-sm">
+                    <span className="pt-0.5 font-display text-base leading-none text-stone-500 tabular-nums">{String(n + 1).padStart(2, "0")}</span>
+                    <div className="min-w-0">
+                      <p className="text-ink">
+                        {r.method === "stripe" ? "Card, through Stripe" : r.method === "paypal" ? "PayPal" : "Recorded by hand"}
+                        {r.restocked ? " · stock returned" : ""}
+                      </p>
+                      {r.reason && <p className="mt-0.5 italic text-ink-soft">{r.reason}</p>}
+                      <p className="mt-0.5 text-xs text-stone-500">
+                        {formatDateTime(r.created_at)}
+                        {r.actor ? ` · ${r.actor.full_name ?? r.actor.email}` : ""}
+                        {r.provider_ref ? ` · ${r.provider_ref}` : ""}
+                      </p>
+                    </div>
+                    <p className="text-right font-medium tabular-nums">
+                      {formatPence(r.amount_pence)}
+                      {r.vat_pence > 0 && <span className="block text-xs font-normal text-stone-500">incl. {formatPence(r.vat_pence)} VAT</span>}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+              {order.refunded_pence < order.total_pence && (
+                <p className="border-t border-ink/15 px-5 py-3 text-right text-sm text-ink-soft">
+                  {formatPence(order.total_pence - order.refunded_pence)} still held
+                </p>
+              )}
+            </Card>
+          )}
 
           <OrderNotes orderId={order.id} initial={order.internal_note ?? ""} />
         </div>

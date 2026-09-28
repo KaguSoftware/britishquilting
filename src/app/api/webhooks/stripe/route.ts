@@ -90,24 +90,47 @@ async function onFailed(pi: Stripe.PaymentIntent) {
   });
 }
 
+/**
+ * Refunds made anywhere (our admin, or the Stripe dashboard) land on the refund ledger.
+ * Each Stripe refund id is recorded once through record_refund (unique provider_ref), so
+ * a refund our admin already recorded is skipped. Stock is never returned from here:
+ * staff decide that in the admin.
+ */
 async function onRefunded(charge: Stripe.Charge) {
   const piId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
   if (!piId) return;
   const db = createAdminClient();
-  const { data: order } = await db.from("orders").select("id, status, total_pence").eq("payment_ref", piId).maybeSingle();
+  const { data: order } = await db.from("orders").select("id, refunded_pence").eq("payment_ref", piId).maybeSingle();
   if (!order) return;
 
-  const full = charge.refunded || charge.amount_refunded >= charge.amount;
-  const marker = `refund:${charge.id}:${charge.amount_refunded}`;
-  const { count } = await db.from("order_events").select("id", { count: "exact", head: true }).eq("order_id", order.id).contains("data", { marker });
-  if (count) return;
+  let refunds: { id: string; amount: number }[] | null = null;
+  try {
+    const list = await getStripe()!.refunds.list({ charge: charge.id, limit: 100 });
+    refunds = list.data.filter((r) => r.status === "succeeded" || r.status === "pending").map((r) => ({ id: r.id, amount: r.amount }));
+  } catch (e) {
+    console.error("stripe refunds list", e);
+  }
+  // Fallback: record the delta between what Stripe has refunded and what we already hold.
+  if (!refunds) {
+    const delta = charge.amount_refunded - order.refunded_pence;
+    refunds = delta > 0 ? [{ id: `${charge.id}:${charge.amount_refunded}`, amount: delta }] : [];
+  }
 
-  if (full && order.status !== "refunded") await db.from("orders").update({ status: "refunded" }).eq("id", order.id);
-  await db.from("order_events").insert({
-    order_id: order.id,
-    kind: "refund",
-    message: full ? "Order refunded in full" : `Partial refund of £${(charge.amount_refunded / 100).toFixed(2)}`,
-    data: { marker, charge: charge.id, amount_refunded: charge.amount_refunded },
-  });
-  await sendRefunded(order.id, full ? undefined : charge.amount_refunded);
+  for (const r of refunds) {
+    const { data, error } = await db.rpc("record_refund", {
+      p_order_id: order.id,
+      p_amount: r.amount,
+      p_items: null,
+      p_restock: false,
+      p_provider_ref: r.id,
+      p_actor: null,
+      p_reason: "Refunded in Stripe",
+      p_method: "stripe",
+    });
+    if (error) {
+      console.error("record_refund from webhook", error);
+      continue;
+    }
+    if (data?.inserted) await sendRefunded(order.id, r.amount);
+  }
 }
