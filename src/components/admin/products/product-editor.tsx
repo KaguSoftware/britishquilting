@@ -7,7 +7,9 @@ import { deleteProduct, saveProduct } from "@/lib/actions/admin/products";
 import { cn, formatPence, slugify, storageUrl } from "@/lib/utils";
 import { poundsToPence } from "../format";
 import { SaveBar, Segmented, SwitchRow, useAction, useConfirm, useUnsavedGuard } from "../controls";
-import { Button, Field, Input, MoneyInput, Select, Textarea, UnitInput } from "../ui";
+import { Button, Field, Input, MoneyInput, Textarea, UnitInput } from "../ui";
+import { ColourPicker } from "@/components/ui/colour-picker";
+import { Dropdown } from "@/components/ui/dropdown";
 import { ImageManager } from "./image-manager";
 import type { ProductForm } from "./product-form";
 
@@ -203,23 +205,17 @@ export function ProductEditor({
         </Section>
 
         <Section title="Fabric details">
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-            <Field label="Colour name" htmlFor="colour">
-              <Input id="colour" value={form.colour} onChange={(e) => set("colour", e.target.value)} placeholder="e.g. Ivory" />
-            </Field>
-            <Field label="Colour shade" htmlFor="hex">
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  id="hex"
-                  value={form.colour_hex || "#f6f1e7"}
-                  onChange={(e) => set("colour_hex", e.target.value)}
-                  className="h-11 w-14 cursor-pointer rounded-[3px] border border-stone-300 bg-white p-1"
-                />
-                <Input value={form.colour_hex} onChange={(e) => set("colour_hex", e.target.value)} placeholder="#ffffff" className="w-28 font-mono text-sm" aria-label="Colour code" />
-              </div>
-            </Field>
-          </div>
+          <Field label="Colour name" htmlFor="colour">
+            <Input id="colour" value={form.colour} onChange={(e) => set("colour", e.target.value)} placeholder="e.g. Ivory" className="sm:max-w-sm" />
+          </Field>
+          <Field label="Colour shade" htmlFor="hex" hint="Pick the nearest tone, or paste an exact code.">
+            <ColourPicker
+              id="hex"
+              value={form.colour_hex}
+              onChange={(hex) => set("colour_hex", hex)}
+              onPickName={(name) => !form.colour.trim() && set("colour", name)}
+            />
+          </Field>
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Made from" htmlFor="comp">
               <Input id="comp" value={form.composition} onChange={(e) => set("composition", e.target.value)} placeholder="e.g. 100% cotton" />
@@ -238,14 +234,13 @@ export function ProductEditor({
 
         <Section title="Where it appears">
           <Field label="Category" htmlFor="cat">
-            <Select id="cat" value={form.category_id} onChange={(e) => set("category_id", e.target.value)}>
-              <option value="">No category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
+            <Dropdown
+              id="cat"
+              value={form.category_id}
+              onChange={(v) => set("category_id", v)}
+              sheetTitle="Category"
+              options={[{ value: "", label: "No category" }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
+            />
           </Field>
           <SwitchRow checked={form.is_active} onChange={(v) => set("is_active", v)} title="Show on the shop" description="When off, only staff can see it. Handy while you're still adding photos." />
           <SwitchRow checked={form.is_featured} onChange={(v) => set("is_featured", v)} title="Feature on the home page" />

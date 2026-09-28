@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { IconCalendar, IconChevronLeft, IconChevronRight, IconClose } from "@/components/icons";
 import { inputClasses } from "./input";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,34 @@ export function DatePicker({
   const [focusDay, setFocusDay] = useState<Date>(() => selected ?? new Date());
   const wrap = useRef<HTMLDivElement>(null);
   const grid = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const still = useReducedMotion();
+  const [rect, setRect] = useState<{ top: number; left: number; up: boolean } | null>(null);
+
+  const place = useCallback(() => {
+    const el = trigger.current;
+    if (!el) return;
+    const b = el.getBoundingClientRect();
+    const below = window.innerHeight - b.bottom;
+    const up = below < 420 && b.top > below;
+    setRect({ top: up ? b.top - 6 : b.bottom + 6, left: Math.max(8, Math.min(b.left, window.innerWidth - 328)), up });
+  }, []);
+
+  const close = useCallback((refocus = true) => {
+    setOpen(false);
+    if (refocus) trigger.current?.focus();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || mobile) return;
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, mobile, place]);
   const minD = fromISO(min);
   const maxD = fromISO(max);
 
@@ -86,11 +115,22 @@ export function DatePicker({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!wrap.current?.contains(t) && !pop.current?.contains(t)) close(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        close();
+      }
     };
     document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
-  }, [open]);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, close]);
 
   useEffect(() => {
     if (open) grid.current?.querySelector<HTMLButtonElement>(`[data-day="${toISO(focusDay)}"]`)?.focus({ preventScroll: true });
@@ -111,7 +151,6 @@ export function DatePicker({
     else if (k === "ArrowUp") shift(-7);
     else if (k === "PageDown") shift(30);
     else if (k === "PageUp") shift(-30);
-    else if (k === "Escape") setOpen(false);
     else return;
     e.preventDefault();
   };
@@ -145,7 +184,7 @@ export function DatePicker({
               disabled={!!off}
               aria-pressed={isSel}
               aria-label={fmt.format(d)}
-              onClick={() => { set(d); setFocusDay(d); setOpen(false); }}
+              onClick={() => { set(d); setFocusDay(d); close(); }}
               className={cn(
                 "relative mx-auto grid size-10 place-items-center rounded-sm text-[0.95rem] tabular-nums transition-colors",
                 out ? "text-stone-500/70" : "text-ink",
@@ -161,11 +200,11 @@ export function DatePicker({
         })}
       </div>
       <div className="mt-3 flex items-center justify-between border-t border-stone-300/70 pt-3 text-sm">
-        <button type="button" className="min-h-11 px-1 text-aubergine-700 underline-offset-4 hover:underline" onClick={() => { const t = new Date(); if (!blocked(t)) { set(t); setOpen(false); } else { setView(t); } }}>
+        <button type="button" className="min-h-11 px-1 text-aubergine-700 underline-offset-4 hover:underline" onClick={() => { const t = new Date(); if (!blocked(t)) { set(t); close(); } else { setView(t); } }}>
           Today
         </button>
         {clearable && current && (
-          <button type="button" className="min-h-11 px-1 text-ink-soft underline-offset-4 hover:underline" onClick={() => { set(null); setOpen(false); }}>
+          <button type="button" className="min-h-11 px-1 text-ink-soft underline-offset-4 hover:underline" onClick={() => { set(null); close(); }}>
             Clear date
           </button>
         )}
@@ -176,13 +215,14 @@ export function DatePicker({
   return (
     <div ref={wrap} className={cn("relative", className)}>
       <button
+        ref={trigger}
         id={triggerId}
         type="button"
         disabled={disabled}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={aria["aria-label"]}
-        onClick={() => { if (!open) { setMobile(window.matchMedia("(max-width: 639px)").matches); setView(selected ?? new Date()); setFocusDay(selected ?? new Date()); } setOpen(!open); }}
+        onClick={() => { if (!open) { setMobile(window.matchMedia("(max-width: 639px)").matches); setView(selected ?? new Date()); setFocusDay(selected ?? new Date()); place(); setOpen(true); } else close(); }}
         className={cn(inputClasses, "flex h-12 items-center gap-3 text-left md:h-11", open && "border-aubergine-500 ring-3 ring-aubergine-300/35")}
       >
         <IconCalendar className="size-[18px] shrink-0 text-ink-soft" />
@@ -190,10 +230,12 @@ export function DatePicker({
       </button>
       {name && <input type="hidden" name={name} value={current ?? ""} />}
 
+      {typeof document !== "undefined" &&
+        createPortal(
       <AnimatePresence>
         {open && mobile && (
-            <div key="sheet" className="fixed inset-0 z-[90]">
-              <motion.div className="absolute inset-0 bg-aubergine-950/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setOpen(false)} />
+            <div key="sheet" ref={pop} className="fixed inset-0 z-[90]">
+              <motion.div className="absolute inset-0 bg-aubergine-950/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => close()} />
               <motion.div
                 role="dialog"
                 aria-label="Choose a date"
@@ -201,30 +243,34 @@ export function DatePicker({
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
-                transition={{ type: "tween", duration: 0.45, ease: [0.2, 0.7, 0.1, 1] }}
+                transition={still ? { duration: 0 } : { type: "tween", duration: 0.45, ease: [0.2, 0.7, 0.1, 1] }}
               >
                 <div className="flex justify-end px-2 pt-2">
-                  <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="grid size-11 place-items-center"><IconClose className="size-5" /></button>
+                  <button type="button" aria-label="Close" onClick={() => close()} className="grid size-11 place-items-center"><IconClose className="size-5" /></button>
                 </div>
                 {panel}
               </motion.div>
             </div>
         )}
-        {open && !mobile && (
+        {open && !mobile && rect && (
             <motion.div
               key="anchored"
+              ref={pop}
               role="dialog"
               aria-label="Choose a date"
-              className="absolute left-0 top-full z-[90] mt-1.5 w-[320px] rounded-sm border border-stone-300 bg-cream-50 shadow-lift"
-              initial={{ opacity: 0, y: -4 }}
+              className="fixed z-[90] w-[320px] rounded-sm border border-stone-300 bg-cream-50 shadow-lift"
+              style={{ left: rect.left, ...(rect.up ? { bottom: window.innerHeight - rect.top } : { top: rect.top }) }}
+              initial={{ opacity: 0, y: still ? 0 : rect.up ? 4 : -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: still ? 0 : 0.2 }}
             >
               {panel}
             </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+          document.body,
+        )}
     </div>
   );
 }
