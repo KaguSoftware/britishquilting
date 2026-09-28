@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
  */
 export function revalidateStorefront() {
   try {
+    revalidatePath("/");
     revalidatePath("/shop", "layout");
     revalidatePath("/product/[slug]", "page");
     revalidatePath("/samples");

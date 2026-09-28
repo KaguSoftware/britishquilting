@@ -74,6 +74,10 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
           quantity: i.quantity,
           line_total_pence: i.line_total_pence,
           product_id: i.product_id,
+          refunded_qty: (refunds ?? []).reduce(
+            (sum, r) => sum + ((r.items as { order_item_id: string; qty: number }[] | null) ?? []).filter((x) => x.order_item_id === i.id).reduce((a, x) => a + Number(x.qty), 0),
+            0,
+          ),
         }))}
       />
 

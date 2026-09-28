@@ -205,7 +205,8 @@ export type FinanceOrder = {
   items: FinanceItem[];
 };
 
-export type FinanceRefund = { order_id: string; amount_pence: number; vat_pence: number; created_at: string };
+/** returned_cost: cost price of goods this refund put back on the shelf, which stops being cost of goods sold. */
+export type FinanceRefund = { order_id: string; amount_pence: number; vat_pence: number; created_at: string; returned_cost?: number };
 export type FinanceExpense = { amount_pence: number; vat_pence: number; spent_on: string };
 
 /** Cost of goods for one order and how many product lines had no cost price. */
@@ -251,6 +252,7 @@ export function computeLedger(orders: FinanceOrder[], refunds: FinanceRefund[], 
   }
   const refundTotal = refunds.reduce((a, r) => a + r.amount_pence, 0);
   const refundVat = refunds.reduce((a, r) => a + r.vat_pence, 0);
+  cogs -= refunds.reduce((a, r) => a + (r.returned_cost ?? 0), 0);
   const expensesGross = expenses.reduce((a, e) => a + e.amount_pence, 0);
   const expensesVat = expenses.reduce((a, e) => a + e.vat_pence, 0);
   const net = gross - refundTotal;

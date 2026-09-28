@@ -121,13 +121,29 @@ In **Authentication → Providers → Email**, keep **Confirm email** on.
 ## 6. Shop settings (in the admin)
 
 Admin → **Settings**:
-- Bank details (shown on trade invoice emails)
-- Invoice terms (days)
-- Click & collect address and opening hours
+- Bank details: shown on the trade invoice email, on the order confirmation page and in the customer's account for any invoice that is still unpaid
+- Invoice terms (days): sets the due date on new trade invoices
+- Click & collect address and opening hours: shown at checkout, on the Delivery help page, on the order page and in the "ready to collect" email
 - Low-stock email address
-- Optional announcement bar text
+- **Announcement bar**: one short line (up to 200 letters) shown in a slim bar above the header on every shop page, including the home page. Customers can close it; it comes back when you change the text. Leave it empty to hide it.
 
-Admin → **Shipping**: check the rates and weight bands, and set the free-delivery threshold (currently £75).
+Admin → **Shipping**: check the rates and weight bands, and set the free-delivery threshold (currently £75). The threshold drives the "add £X for free delivery" bar in the basket, the checkout message and the Delivery help page.
+
+---
+
+## 6a. Money page (owner only)
+
+Admin → **Money** shows sales, refunds, VAT, fees, cost of goods and profit for any period, plus unpaid trade invoices and spreadsheets for your accountant. Only the owner account can open it; staff accounts are sent back to the Today page.
+
+**Fee rates.** At the bottom of the Money page, under *Fee rates*, enter what Stripe and PayPal charge you (a percentage plus a fixed amount per payment, e.g. Stripe UK cards 1.5% + 20p, PayPal 2.9% + 30p). Fees are estimated from these rates for each card or PayPal order; trade bank transfers cost nothing. Check your Stripe and PayPal statements once in a while and update the rates if they change.
+
+**Cost prices.** Profit is only as good as your cost prices. In Admin → **Products**, open each product and fill in *Cost price*, which is what you paid per metre (cut fabric), per roll (full rolls) or per item. It is private: customers never see it, and staff cannot open the Money page. The cost is copied onto each order line when the order is placed, so changing it later does not rewrite past orders. Lines without a cost are counted on the Money page as "cost missing". When a refund returns goods to stock, their cost comes back off cost of goods sold.
+
+**Stock units.** Stock is counted per product in the unit it is sold in: metres for cut fabric, **whole rolls** for full-roll products (a 50m roll counts as 1), and items for paper and sundries. A full-roll product and the same fabric sold by the metre are separate products with separate stock.
+
+**Expenses and receipts.** Add each bill under *Expenses book* with its supplier, category, amount and the VAT on it, and attach a photo or PDF of the receipt. Receipts are kept in a private storage area that only the owner can open (links expire after a few minutes). The expenses and VAT spreadsheets under *Download for your accountant* include them.
+
+**Refunds and cancelling.** Cancel an order before it is sent (you choose whether to put stock back; a discount code use is given back). After it is sent, use Refund: full or part, line by line, choosing which lines go back on the shelf (cut lengths stay off stock by default). An unpaid trade invoice cannot be refunded: cancel it, or mark it paid first.
 
 ---
 

@@ -144,12 +144,13 @@ export async function addTracking(input: z.input<typeof trackingSchema>): Promis
     return fail("Only paid orders that haven't been sent yet can be marked as sent.");
 
   const url = parsed.data.trackingUrl || buildTrackingUrl(carrier, trackingNumber) || null;
+  // Shipment first: if the move then fails we only have to drop the row (a status step back would be refused).
+  const { data: shipment, error } = await db.from("shipments").insert({ order_id: orderId, carrier, tracking_number: trackingNumber, tracking_url: url }).select("id").single();
+  if (error || !shipment) return fail("Couldn't save the tracking number.");
   const { data: moved } = await db.from("orders").update({ status: "shipped" }).eq("id", orderId).eq("status", order.status).select("id");
-  if (!moved?.length) return fail("This order was just changed by someone else. Please refresh.");
-  const { error } = await db.from("shipments").insert({ order_id: orderId, carrier, tracking_number: trackingNumber, tracking_url: url });
-  if (error) {
-    await db.from("orders").update({ status: order.status }).eq("id", orderId);
-    return fail("Couldn't save the tracking number.");
+  if (!moved?.length) {
+    await db.from("shipments").delete().eq("id", shipment.id);
+    return fail("This order was just changed by someone else. Please refresh.");
   }
   await db.from("order_events").insert({
     order_id: orderId,
@@ -284,7 +285,7 @@ export async function refundOrder(input: z.input<typeof refundSchema>): Promise<
   const { db, viewer } = await staffDb();
   const order = await loadOrder(db, orderId);
   if (!order) return fail("We couldn't find that order.");
-  const takenMoney = Boolean(order.paid_at) || order.payment_provider === "invoice";
+  const takenMoney = Boolean(order.paid_at);
   if (!takenMoney || !canTransition(order.status, "refunded")) return fail("This order can't be refunded.");
 
   const left = order.total_pence - (order.refunded_pence ?? 0);

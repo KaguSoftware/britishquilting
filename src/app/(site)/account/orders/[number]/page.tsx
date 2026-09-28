@@ -15,6 +15,7 @@ const eventTitle: Record<string, string> = {
   paid: "Payment received",
   shipped: "On its way",
   refund: "Refund issued",
+  cancelled: "Order cancelled",
   note: "Note from the workroom",
   email: "Email sent",
 };
@@ -47,12 +48,15 @@ export default async function OrderDetailPage({ params }: PageProps<"/account/or
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, number, status, fulfilment, shipping_address, billing_address, shipping_name, subtotal_pence, discount_pence, shipping_pence, total_pence, vat_included_pence, discount_code, payment_provider, is_trade, invoice_due_at, customer_note, created_at, paid_at, order_items(id, name, image_path, sale_mode, is_swatch, length_m, quantity, unit_price_pence, line_total_pence), order_events(id, kind, message, data, visible_to_customer, created_at), shipments(id, carrier, tracking_number, tracking_url, shipped_at)",
+      "id, number, status, fulfilment, shipping_address, billing_address, shipping_name, subtotal_pence, discount_pence, shipping_pence, total_pence, vat_included_pence, discount_code, payment_provider, is_trade, invoice_due_at, customer_note, created_at, paid_at, refunded_pence, order_items(id, name, image_path, sale_mode, is_swatch, length_m, quantity, unit_price_pence, line_total_pence), order_events(id, kind, message, data, visible_to_customer, created_at), shipments(id, carrier, tracking_number, tracking_url, shipped_at)",
     )
     .eq("number", n)
     .eq("user_id", viewer.id)
     .maybeSingle();
   if (!order) notFound();
+  const { data: settings } = await supabase.from("store_settings").select("bank_details, collection_address, collection_hours").eq("id", 1).maybeSingle();
+  const bankDetails =
+    order.payment_provider === "invoice" && !order.paid_at && !["cancelled", "refunded"].includes(order.status) ? settings?.bank_details?.trim() || null : null;
 
   const items = order.order_items ?? [];
   const shipments = [...(order.shipments ?? [])].sort((a, b) => +new Date(b.shipped_at) - +new Date(a.shipped_at));
@@ -151,6 +155,7 @@ export default async function OrderDetailPage({ params }: PageProps<"/account/or
             <div className="stitch my-3" />
             <Row label="Total" value={formatPence(order.total_pence)} strong />
             {order.vat_included_pence > 0 && <p className="text-right text-xs text-stone-500">Includes {formatPence(order.vat_included_pence)} VAT</p>}
+            {(order.refunded_pence ?? 0) > 0 && <Row label="Refunded" value={`−${formatPence(order.refunded_pence)}`} />}
           </dl>
 
           <div className="mt-10 grid gap-8 border-t border-stone-300 pt-8 sm:grid-cols-2">
@@ -159,7 +164,12 @@ export default async function OrderDetailPage({ params }: PageProps<"/account/or
                 <IconPin className="size-4 text-gold-600" /> {order.fulfilment === "collection" ? "Collection" : "Delivering to"}
               </h4>
               {order.fulfilment === "collection" ? (
-                <p className="mt-2 text-sm leading-relaxed text-ink-soft">From our London workroom. We&apos;ll email you when it&apos;s ready.</p>
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-soft">
+                  {settings?.collection_address || "From our London workroom."}
+                  {settings?.collection_hours ? `
+${settings.collection_hours}` : ""}
+                  <span className="mt-1 block">We&apos;ll email you when it&apos;s ready.</span>
+                </p>
               ) : addr ? (
                 <address className="mt-2 text-sm not-italic leading-relaxed text-ink-soft">
                   {[addr.full_name ?? addr.name, addr.line1, addr.line2, addr.city, addr.county, addr.postcode].filter(Boolean).map((l, i) => (
@@ -184,6 +194,13 @@ export default async function OrderDetailPage({ params }: PageProps<"/account/or
               </p>
             </div>
           </div>
+          {bankDetails && (
+            <div className="mt-8 border-l-2 border-gold-500 bg-cream-50 px-5 py-4">
+              <h4 className="text-sm font-medium">Pay by bank transfer</h4>
+              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{bankDetails}</p>
+              <p className="mt-2 text-sm text-ink-soft">Please use {orderRef(order.number)} as the payment reference.</p>
+            </div>
+          )}
           {order.customer_note && (
             <p className="mt-8 border-l-2 border-gold-500 pl-4 text-sm italic leading-relaxed text-ink-soft">&ldquo;{order.customer_note}&rdquo;</p>
           )}

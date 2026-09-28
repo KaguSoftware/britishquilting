@@ -32,7 +32,12 @@ export type ActionItem = {
   quantity: number;
   line_total_pence: number;
   product_id: string | null;
+  /** Already refunded on earlier refunds (metres for cut lines, otherwise units or rolls). */
+  refunded_qty?: number;
 };
+
+/** What is still refundable on a line after earlier refunds. */
+const leftQty = (l: ActionItem) => Math.max(0, Math.round((lineStockQty(l) - (l.refunded_qty ?? 0)) * 100) / 100);
 
 export function OrderActions({ order, items }: { order: O; items: ActionItem[] }) {
   const { run, pending } = useAction();
@@ -44,7 +49,8 @@ export function OrderActions({ order, items }: { order: O; items: ActionItem[] }
 
   const s = order.status;
   const live = ["paid", "processing"].includes(s);
-  const paid = Boolean(order.paid_at) || order.payment_provider === "invoice";
+  // Unpaid invoices have taken no money: cancel them, or mark them paid before refunding (keeps the finance ledger honest).
+  const paid = Boolean(order.paid_at);
   const invoiceUnpaid = order.payment_provider === "invoice" && !order.paid_at && !["cancelled", "refunded"].includes(s);
   const left = order.total_pence - order.refunded_pence;
   const showRefund = canRefund(s, paid) && left > 0;
@@ -274,7 +280,7 @@ function RefundSheet({ onClose, order, items }: { onClose: () => void; order: O;
   const left = order.total_pence - order.refunded_pence;
   const [mode, setMode] = useState<"full" | "partial">(order.refunded_pence > 0 ? "partial" : "full");
   const [picks, setPicks] = useState<Record<string, Pick>>(() =>
-    Object.fromEntries(lines.map((l) => [l.id, { qty: lineStockQty(l), restock: restockByDefault(l.sale_mode) }])),
+    Object.fromEntries(lines.map((l) => [l.id, { qty: leftQty(l), restock: restockByDefault(l.sale_mode) }])),
   );
   const [partialQty, setPartialQty] = useState<Record<string, number>>(() => Object.fromEntries(lines.map((l) => [l.id, 0])));
   const [amountText, setAmountText] = useState("");
@@ -283,7 +289,7 @@ function RefundSheet({ onClose, order, items }: { onClose: () => void; order: O;
   const provider = order.payment_provider === "paypal" ? "PayPal" : order.payment_provider === "stripe" ? "the card" : null;
   const [manual, setManual] = useState(!provider || !order.paid_at);
 
-  const qtyOf = (l: ActionItem) => (mode === "full" ? lineStockQty(l) : partialQty[l.id] ?? 0);
+  const qtyOf = (l: ActionItem) => (mode === "full" ? leftQty(l) : partialQty[l.id] ?? 0);
   const suggested = Math.min(
     left,
     lines.reduce((sum, l) => sum + Math.round((l.line_total_pence * qtyOf(l)) / Math.max(lineStockQty(l), 1e-9)), 0),
@@ -295,7 +301,7 @@ function RefundSheet({ onClose, order, items }: { onClose: () => void; order: O;
   const hasCut = lines.some((l) => l.sale_mode === "metre");
 
   const setQty = (l: ActionItem, q: number) => {
-    const max = lineStockQty(l);
+    const max = leftQty(l);
     const clean = Math.max(0, Math.min(max, Math.round(q * 100) / 100));
     setPartialQty((p) => ({ ...p, [l.id]: clean }));
   };
@@ -340,7 +346,8 @@ function RefundSheet({ onClose, order, items }: { onClose: () => void; order: O;
             </div>
             <ul className="divide-y divide-ink/10">
               {lines.map((l) => {
-                const max = lineStockQty(l);
+                const ordered = lineStockQty(l);
+                const max = leftQty(l);
                 const q = qtyOf(l);
                 const step = l.sale_mode === "metre" ? 0.5 : 1;
                 const p = picks[l.id]!;
@@ -349,7 +356,8 @@ function RefundSheet({ onClose, order, items }: { onClose: () => void; order: O;
                     <div className="min-w-0">
                       <p className="truncate text-[0.95rem] font-medium">{l.name}</p>
                       <p className="text-xs text-stone-500">
-                        Ordered {fmtQty(l, max)} · {formatPence(l.line_total_pence)}
+                        Ordered {fmtQty(l, ordered)} · {formatPence(l.line_total_pence)}
+                        {max < ordered && `, ${fmtQty(l, ordered - max)} already refunded`}
                       </p>
                     </div>
                     <div className={cn("flex items-center justify-end", q <= 0 && "opacity-40")}>

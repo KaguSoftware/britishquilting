@@ -67,6 +67,13 @@ export default async function DeliveryPage() {
             Choose collection at checkout and there&apos;s nothing to pay for delivery. We&apos;ll email you when your order is cut and ready, along with the address
             {settings?.collection_hours ? <> and collection hours ({settings.collection_hours})</> : null}. Please bring your order number.
           </p>
+          {settings?.collection_address && (
+            <p className="whitespace-pre-line">
+              <strong>Collect from:</strong> {settings.collection_address}
+              {settings.collection_hours ? `
+${settings.collection_hours}` : ""}
+            </p>
+          )}
           <h2>Outside mainland UK</h2>
           <p>
             We currently deliver to UK mainland addresses online. For the Highlands and Islands, Northern Ireland, the Channel Islands or overseas,

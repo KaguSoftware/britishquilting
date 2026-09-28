@@ -84,10 +84,30 @@ export async function loadOrders(db: SupabaseClient, start: Date, end: Date) {
     db.from("orders").select(ORDER_COLS).not("paid_at", "is", null).gte("paid_at", start.toISOString()).lt("paid_at", end.toISOString()).order("paid_at").range(a, b),
   );
 }
-export async function loadRefunds(db: SupabaseClient, start: Date, end: Date) {
-  return all<FinanceRefund>((a, b) =>
-    db.from("order_refunds").select("order_id, amount_pence, vat_pence, created_at").gte("created_at", start.toISOString()).lt("created_at", end.toISOString()).order("created_at").range(a, b),
+type RefundRow = FinanceRefund & { restocked: boolean; items: { order_item_id: string; qty: number; restock?: boolean }[] | null };
+
+/** Refunds in the period, each with the cost price of anything it returned to stock (that cost comes off cost of goods sold). */
+export async function loadRefunds(db: SupabaseClient, start: Date, end: Date): Promise<FinanceRefund[]> {
+  const rows = await all<RefundRow>((a, b) =>
+    db
+      .from("order_refunds")
+      .select("order_id, amount_pence, vat_pence, created_at, restocked, items")
+      .gte("created_at", start.toISOString())
+      .lt("created_at", end.toISOString())
+      .order("created_at")
+      .range(a, b),
   );
+  const back = (r: RefundRow) => (r.restocked ? (r.items ?? []).filter((i) => i.restock !== false) : []);
+  const ids = [...new Set(rows.flatMap((r) => back(r).map((i) => i.order_item_id)))];
+  const cost = new Map<string, number | null>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await db.from("order_items").select("id, cost_pence, is_swatch").in("id", ids.slice(i, i + 200));
+    for (const it of data ?? []) cost.set(it.id as string, it.is_swatch ? 0 : ((it.cost_pence as number | null) ?? 0));
+  }
+  return rows.map(({ restocked: _r, items: _i, ...r }) => ({
+    ...r,
+    returned_cost: Math.round(back({ ...r, restocked: _r, items: _i }).reduce((a, i) => a + (cost.get(i.order_item_id) ?? 0) * Number(i.qty), 0)),
+  }));
 }
 export async function loadExpenses(db: SupabaseClient, fromDay: string, toDay: string) {
   return all<ExpenseRow>((a, b) =>
@@ -158,7 +178,7 @@ export async function loadFinance(db: SupabaseClient, period: Period, prev: Peri
     const b = map.get(bucketKey(londonDay(new Date(r.created_at)), unit));
     if (!b) continue;
     b.revenue -= r.amount_pence - r.vat_pence;
-    b.profit -= r.amount_pence - r.vat_pence;
+    b.profit -= r.amount_pence - r.vat_pence - (r.returned_cost ?? 0);
   }
   for (const e of expenses) {
     const [y, m, d] = e.spent_on.split("-").map(Number);

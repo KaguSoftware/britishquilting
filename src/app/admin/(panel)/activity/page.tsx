@@ -11,6 +11,19 @@ const LABELS: Record<string, string> = {
   "order.invoice_paid": "marked an invoice as paid",
   "order.note": "edited an order note",
   "order.refund": "refunded an order",
+  "order.cancel": "cancelled an order",
+  "category.restore": "restored a category",
+  "discount.restore": "restored a discount code",
+  "discount.enable": "switched on a discount code",
+  "discount.disable": "switched off a discount code",
+  "expense.create": "added an expense",
+  "expense.update": "edited an expense",
+  "expense.delete": "deleted an expense",
+  "expense.restore": "restored an expense",
+  "finance.settings": "changed fee rates",
+  "review.delete": "deleted a review",
+  "newsletter.resubscribe": "resubscribed someone to the newsletter",
+  "newsletter.unsubscribe": "unsubscribed someone from the newsletter",
   "product.create": "added a product",
   "product.update": "edited a product",
   "product.delete": "deleted a product",
@@ -51,6 +64,10 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
   const { db } = await ownerDb();
   const { data } = await db.from("audit_log").select("*, actor:profiles(full_name, email)").order("created_at", { ascending: false }).limit(limit);
   const rows = data ?? [];
+  // Deleted things have nothing to open, so their rows don't link.
+  const latest = new Map<string, string>();
+  for (const r of rows) if (!latest.has(`${r.entity}:${r.entity_id}`)) latest.set(`${r.entity}:${r.entity_id}`, String(r.action));
+  const deleted = new Set([...latest].filter(([, action]) => action.endsWith(".delete")).map(([key]) => key));
   return (
     <div>
       <PageHeader title="Activity log" description="Who changed what, and when. Useful if something looks different and you want to know why." />
@@ -59,7 +76,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
       ) : (
         <ol className="overflow-hidden rounded-[3px] border border-ink/12 bg-cream-50">
           {rows.map((r) => {
-            const href = link(r.entity, r.entity_id);
+            const href = deleted.has(`${r.entity}:${r.entity_id}`) ? null : link(r.entity, r.entity_id);
             const detail = (r.data?.name ?? r.data?.code ?? r.data?.company ?? r.data?.email ?? null) as string | null;
             return (
               <li key={r.id} className="flex flex-col gap-0.5 border-b border-ink/10 px-4 py-3 last:border-0 sm:flex-row sm:items-baseline sm:gap-4 md:px-5">

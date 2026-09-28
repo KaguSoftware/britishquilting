@@ -154,6 +154,15 @@ describe("ledger", () => {
     expect(l.profit).toBe(12500 - 200 - 2000 - 2000);
   });
 
+  it("takes goods returned to stock off cost of goods sold", () => {
+    const l = computeLedger(
+      [order({ items: [{ product_id: "p", is_swatch: false, sale_mode: "unit", length_m: null, quantity: 3, line_total_pence: 2250, cost_pence: 300 }] })],
+      [{ order_id: "o", amount_pence: 750, vat_pence: 125, created_at: "2026-09-12T10:00:00Z", returned_cost: 300 }],
+      [],
+    );
+    expect(l.cogs).toBe(600);
+  });
+
   it("is all zeros with nothing in it", () => {
     const l = computeLedger([], [], []);
     expect(l.profit).toBe(0);
