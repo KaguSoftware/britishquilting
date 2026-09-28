@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Minus, Plus, Scissors, X } from "lucide-react";
+import { IconMinus as Minus, IconPlus as Plus, IconScissors as Scissors, IconClose as X } from "@/components/icons";
 import { useCart, type CartItem } from "./cart-store";
 import { quoteCart, type CartQuote } from "@/lib/actions/cart";
 import { formatMetres, formatPence } from "@/lib/utils";

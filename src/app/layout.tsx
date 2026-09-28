@@ -1,17 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Cormorant_Garamond, Inter_Tight } from "next/font/google";
+import { Libre_Caslon_Display, Libre_Caslon_Text, Schibsted_Grotesk } from "next/font/google";
 import { Toaster } from "sonner";
 import { CartProvider } from "@/components/cart/cart-store";
 import { siteUrl } from "@/lib/utils";
 import "./globals.css";
 
-const display = Cormorant_Garamond({
-  variable: "--font-cormorant",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
-});
-const sans = Inter_Tight({ variable: "--font-inter-tight", subsets: ["latin"] });
+// Caslon: the typeface of English printing since the 1720s. Display cut for headings, Text cut for italics and small serif copy.
+const display = Libre_Caslon_Display({ variable: "--font-caslon-display", subsets: ["latin"], weight: "400" });
+const serif = Libre_Caslon_Text({ variable: "--font-caslon-text", subsets: ["latin"], weight: ["400", "700"], style: ["normal", "italic"] });
+// A newsprint grotesk for UI, sturdier and less anonymous than the usual geometric sans.
+const sans = Schibsted_Grotesk({ variable: "--font-grotesk", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -26,7 +24,7 @@ export const viewport: Viewport = { themeColor: "#1c0a24" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en-GB" className={`${display.variable} ${sans.variable}`}>
+    <html lang="en-GB" className={`${display.variable} ${serif.variable} ${sans.variable}`}>
       <body className="grain min-h-svh">
         <CartProvider>
           {children}

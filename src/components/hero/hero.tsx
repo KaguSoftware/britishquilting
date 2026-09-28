@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { ArrowRight } from "lucide-react";
+import { IconArrowRight as ArrowRight } from "@/components/icons";
 import { Crown } from "@/components/site/brand";
 import { FabricPlaceholder } from "@/components/shop/product-card";
 

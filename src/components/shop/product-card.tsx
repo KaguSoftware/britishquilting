@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Star } from "lucide-react";
+import { IconStar as Star } from "@/components/icons";
 import { formatPence, storageUrl } from "@/lib/utils";
 
 export type ProductCardData = {

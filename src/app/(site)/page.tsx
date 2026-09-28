@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Ruler, Scissors, Truck } from "lucide-react";
+import { IconArrowRight as ArrowRight, IconTape as Ruler, IconScissors as Scissors, IconVan as Truck } from "@/components/icons";
 import { Hero, type HeroCategory } from "@/components/hero/hero";
 import { Crown } from "@/components/site/brand";
 import { Reveal } from "@/components/site/reveal";

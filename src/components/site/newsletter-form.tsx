@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { ArrowRight, Check } from "lucide-react";
+import { IconArrowRight as ArrowRight, IconCheck as Check } from "@/components/icons";
 import { subscribe, type NewsletterState } from "@/lib/actions/newsletter";
 
 export function NewsletterForm() {

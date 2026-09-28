@@ -27,8 +27,9 @@
   --color-success: #3f6b4a;
   --color-danger: #9b2c2c;
 
-  --font-display: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
-  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-caslon-display), "Libre Caslon Display", Georgia, serif;
+  --font-serif: var(--font-caslon-text), "Libre Caslon Text", Georgia, serif;
+  --font-sans: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
 
   --ease-silk: cubic-bezier(0.2, 0.7, 0.1, 1);
   --ease-drape: cubic-bezier(0.65, 0, 0.35, 1);
@@ -48,7 +49,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
-  font-feature-settings: "ss01", "cv11";
+  font-feature-settings: "kern", "liga";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -75,9 +76,12 @@ body {
 
 @utility font-display {
   font-family: var(--font-display);
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-weight: 400;
+  letter-spacing: -0.015em;
 }
+
+/* Italics always come from the Text cut, which has real italic forms */
+.font-display em, .font-display i, em.font-display { font-family: var(--font-serif); font-style: italic; letter-spacing: -0.02em; }
 
 /* Gold stitch divider */
 @utility stitch {
@@ -88,11 +92,10 @@ body {
 }
 
 @utility eyebrow {
-  font-family: var(--font-sans);
-  font-size: 0.72rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  font-weight: 500;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 0.95rem;
+  letter-spacing: 0;
 }
 
 /* Lenis */
