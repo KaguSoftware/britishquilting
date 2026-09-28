@@ -50,10 +50,10 @@ export function ProductCard({ p, sizes = "(min-width: 768px) 25vw, 50vw" }: { p:
           <FabricPlaceholder hex={p.colour_hex} />
         )}
         {!p.in_stock && (
-          <span className="absolute left-3 top-3 bg-cream-50/90 px-2.5 py-1 text-[0.7rem] uppercase tracking-widest">Sold out</span>
+          <span className="absolute left-3 top-3 bg-cream-50 px-2 py-0.5 font-serif text-sm italic text-ink">Sold out</span>
         )}
         {p.in_stock && p.low_stock && (
-          <span className="absolute left-3 top-3 bg-gold-100/95 px-2.5 py-1 text-[0.7rem] uppercase tracking-widest text-gold-600">Low stock</span>
+          <span className="absolute left-3 top-3 bg-cream-50 px-2 py-0.5 font-serif text-sm italic text-gold-600">Only a little left</span>
         )}
       </div>
       <div className="mt-4 flex items-start justify-between gap-3">

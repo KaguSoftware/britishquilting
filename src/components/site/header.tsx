@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { IconMenu, IconUser } from "@/components/icons";
+import { IconBasket, IconMenu, IconUser } from "@/components/icons";
 import { Logo } from "./brand";
 import { MobileMenu } from "./mobile-menu";
 import { useCart } from "@/components/cart/cart-store";
@@ -72,7 +72,7 @@ export function Header() {
           </nav>
 
           <div className="flex items-center gap-2 md:gap-4">
-            <Link href="/account" aria-label="Your account" className="grid size-11 place-items-center">
+            <Link href="/account" aria-label="Your account" className="hidden size-11 place-items-center sm:grid">
               <IconUser className="size-[22px]" />
             </Link>
             <button
@@ -80,8 +80,11 @@ export function Header() {
               aria-label={`Open basket, ${count} items`}
               className="flex h-11 items-center gap-1.5 text-[0.95rem]"
             >
-              <span>Basket</span>
-              <span className="tabular-nums opacity-70">({hydrated ? count : 0})</span>
+              <IconBasket className="size-[22px] sm:hidden" />
+              <span className="hidden sm:inline">Basket</span>
+              <span className="tabular-nums opacity-70">
+                <span className="hidden sm:inline">(</span>{hydrated ? count : 0}<span className="hidden sm:inline">)</span>
+              </span>
             </button>
             <button onClick={() => setMenu(true)} aria-label="Open menu" aria-expanded={menu} className="-mr-2 grid size-11 place-items-center lg:hidden">
               <IconMenu className="size-6" />

@@ -232,7 +232,10 @@ function Strip({ strip, tex, progress }: { strip: number; tex: ReturnType<typeof
 export function Fabric({ progress }: { progress: RefObject<number> }) {
   const tex = useMemo(() => makeWeaveTextures(), []);
   const group = useRef<THREE.Group>(null);
-  const { camera, pointer } = useThree();
+  const { camera, pointer, size } = useThree();
+  // Fit the bolt to narrow (portrait) screens: visible width at z=0 from a 35° fov at distance 7
+  const aspect = size.width / size.height;
+  const fit = Math.min(1, (2 * 7 * Math.tan((35 * Math.PI) / 360) * aspect * 0.86) / W);
   const cam = useRef(0);
 
   useFrame((state, dt) => {
@@ -252,7 +255,7 @@ export function Fabric({ progress }: { progress: RefObject<number> }) {
   });
 
   return (
-    <group ref={group}>
+    <group ref={group} scale={fit}>
       {[-1, 0, 1].map((s) => (
         <Strip key={s} strip={s} tex={tex} progress={progress} />
       ))}

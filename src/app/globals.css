@@ -44,7 +44,8 @@
   --fg: var(--color-ink);
 }
 
-html { background: var(--bg); }
+/* Always reserve the scrollbar gutter so locking scroll (menu, basket) never shifts the layout */
+html { background: var(--bg); scrollbar-gutter: stable; }
 body {
   background: var(--bg);
   color: var(--fg);
