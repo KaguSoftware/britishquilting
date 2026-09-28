@@ -3,18 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { IconArrowRight, IconBolt, IconParcel, IconPlus, IconSearch, IconUser } from "@/components/icons";
+import { IconArrowRight, IconBolt, IconChart, IconParcel, IconPlus, IconSearch, IconUser } from "@/components/icons";
 import { adminSearch, type SearchHit } from "@/lib/actions/admin/search";
 import { cn } from "@/lib/utils";
 import { NAV } from "./shell";
 
-type Row = { key: string; title: string; subtitle?: string; href: string; icon: typeof IconSearch; group: string };
+type Row = { key: string; title: string; subtitle?: string; href: string; icon: typeof IconSearch; group: string; owner?: boolean };
 
 const QUICK: Row[] = [
   { key: "new-product", title: "Add a new product", href: "/admin/products/new", icon: IconPlus, group: "Quick actions" },
   { key: "to-pack", title: "Orders to pack", href: "/admin/orders?tab=to_pack&view=board", icon: IconParcel, group: "Quick actions" },
   { key: "new-discount", title: "Create a discount code", href: "/admin/discounts?new=1", icon: IconPlus, group: "Quick actions" },
   { key: "new-post", title: "Write a journal post", href: "/admin/journal/new", icon: IconPlus, group: "Quick actions" },
+  { key: "new-expense", title: "Add an expense", href: "/admin/finance?expense=new", icon: IconPlus, group: "Quick actions", owner: true },
+  { key: "profit", title: "Profit and VAT this month", href: "/admin/finance", icon: IconChart, group: "Quick actions", owner: true },
 ];
 
 export function CommandPalette({ open, onClose, isOwner }: { open: boolean; onClose: () => void; isOwner: boolean }) {
@@ -69,7 +71,7 @@ export function CommandPalette({ open, onClose, isOwner }: { open: boolean; onCl
       icon: h.kind === "order" ? IconParcel : h.kind === "product" ? IconBolt : IconUser,
       group: h.kind === "order" ? "Orders" : h.kind === "product" ? "Products" : "Customers",
     }));
-    return [...found, ...QUICK.filter(match), ...pages.filter(match)];
+    return [...found, ...QUICK.filter((r) => (!r.owner || isOwner) && match(r)), ...pages.filter(match)];
   }, [q, hits, isOwner]);
 
   useEffect(() => setIndex(0), [rows.length]);

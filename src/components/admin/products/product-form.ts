@@ -13,6 +13,7 @@ export type ProductForm = {
   price: string;
   trade_price: string;
   compare_at: string;
+  cost_price: string;
   min_length_m: string;
   length_step_m: string;
   max_length_m: string;
@@ -52,6 +53,7 @@ export function toForm(p: Record<string, unknown> | null, images: EditorImage[],
     price: penceToPounds(p?.price_pence as number | null),
     trade_price: penceToPounds(p?.trade_price_pence as number | null),
     compare_at: penceToPounds(p?.compare_at_pence as number | null),
+    cost_price: penceToPounds(p?.cost_price_pence as number | null),
     min_length_m: p ? n(p.min_length_m) : "0.5",
     length_step_m: p ? n(p.length_step_m) : "0.5",
     max_length_m: n(p?.max_length_m),

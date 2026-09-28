@@ -25,10 +25,13 @@ export function ProductEditor({
   initial,
   isNew,
   categories,
+  showCost = false,
 }: {
   initial: ProductForm;
   isNew: boolean;
   categories: { id: string; name: string }[];
+  /** Owner only: the private cost price field. */
+  showCost?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -47,7 +50,8 @@ export function ProductEditor({
     });
 
   const mode = MODES[form.sale_mode];
-  const stockUnit = form.sale_mode === "unit" ? "items" : "m";
+  const stockUnit = form.sale_mode === "unit" ? "items" : form.sale_mode === "roll" ? "rolls" : "m";
+  const costUnit = form.sale_mode === "metre" ? "metre" : form.sale_mode === "roll" ? "roll" : "unit";
 
   const save = async () => {
     const res = await run(
@@ -64,6 +68,7 @@ export function ProductEditor({
           price_pence: poundsToPence(form.price) ?? -1,
           trade_price_pence: poundsToPence(form.trade_price),
           compare_at_pence: poundsToPence(form.compare_at),
+          ...(showCost ? { cost_price_pence: poundsToPence(form.cost_price) } : {}),
           min_length_m: form.min_length_m,
           length_step_m: form.length_step_m,
           max_length_m: form.max_length_m,
@@ -171,6 +176,12 @@ export function ProductEditor({
             </Field>
           )}
 
+          {showCost && (
+            <Field label={`Cost price per ${costUnit} (optional)`} htmlFor="cost" hint={`What you paid per ${costUnit}, private. Only you see this, it works out your profit.`} className="sm:max-w-xs">
+              <MoneyInput id="cost" value={form.cost_price} onChange={(e) => set("cost_price", e.target.value)} placeholder="0.00" />
+            </Field>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Was price (optional)" htmlFor="compare" hint="Shows the old price crossed out, for a sale.">
               <MoneyInput id="compare" value={form.compare_at} onChange={(e) => set("compare_at", e.target.value)} placeholder="0.00" />
@@ -185,7 +196,7 @@ export function ProductEditor({
           <SwitchRow checked={form.track_stock} onChange={(v) => set("track_stock", v)} title="Keep count of stock" description="Turn off for things you can always get more of. When on, it can't be sold once it runs out." />
           {form.track_stock && (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="How much you have" htmlFor="stock" hint={form.sale_mode === "unit" ? "Number of items." : "Total metres in stock."}>
+              <Field label="How much you have" htmlFor="stock" hint={form.sale_mode === "unit" ? "Number of items." : form.sale_mode === "roll" ? "Number of whole rolls." : "Total metres in stock."}>
                 <UnitInput unit={stockUnit} id="stock" value={form.stock_qty} onChange={(e) => set("stock_qty", e.target.value.replace(/[^\d.]/g, ""))} className="text-lg" />
               </Field>
               <Field label="Warn me when it drops to" htmlFor="low" hint="It shows as 'Low stock' on your Today page.">

@@ -9,7 +9,8 @@ export const metadata = { title: "Edit product" };
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const { db } = await staffDb();
+  const { db, viewer } = await staffDb();
+  const isOwner = viewer.role === "owner";
   const [{ data: product }, { data: images }, { data: categories }, { count: waiting }] = await Promise.all([
     db.from("products").select("*").eq("id", id).maybeSingle(),
     db.from("product_images").select("id, storage_path, alt, width, height").eq("product_id", id).order("sort_order"),
@@ -32,8 +33,9 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
       <ProductEditor
         key={product.updated_at}
         isNew={false}
-        initial={toForm(product, (images ?? []).map((i) => ({ id: i.id, storage_path: i.storage_path, alt: i.alt ?? "", width: i.width, height: i.height })), product.id)}
+        initial={toForm(isOwner ? product : { ...product, cost_price_pence: null }, (images ?? []).map((i) => ({ id: i.id, storage_path: i.storage_path, alt: i.alt ?? "", width: i.width, height: i.height })), product.id)}
         categories={categories ?? []}
+        showCost={isOwner}
       />
     </div>
   );

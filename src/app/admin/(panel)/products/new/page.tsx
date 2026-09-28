@@ -6,12 +6,12 @@ import { toForm } from "@/components/admin/products/product-form";
 export const metadata = { title: "New product" };
 
 export default async function NewProductPage() {
-  const { db } = await staffDb();
+  const { db, viewer } = await staffDb();
   const { data: categories } = await db.from("categories").select("id, name").order("sort_order");
   return (
     <div>
       <PageHeader back={{ href: "/admin/products", label: "All products" }} title="Add a product" description="Fill in what you know. You can come back and add more at any time." />
-      <ProductEditor isNew initial={toForm(null, [], crypto.randomUUID())} categories={categories ?? []} />
+      <ProductEditor isNew initial={toForm(null, [], crypto.randomUUID())} categories={categories ?? []} showCost={viewer.role === "owner"} />
     </div>
   );
 }
