@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {IconCheck, IconFilter, IconClose} from "@/components/icons";
+import { Dropdown } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
 
 type Facets = {
@@ -155,19 +156,15 @@ export function FilterBar({ facets, count, total }: { facets: Facets; count: num
           <p className={cn("text-sm text-ink-soft tabular-nums transition-opacity", pending && "opacity-50")} aria-live="polite">
             {count === total ? `${total} ${total === 1 ? "fabric" : "fabrics"}` : `${count} of ${total}`}
           </p>
-          <label className="relative inline-flex items-center">
-            <span className="sr-only">Sort by</span>
-            <select
-              value={sort}
-              onChange={(e) => set("sort", e.target.value === "featured" ? null : e.target.value)}
-              className="min-h-11 appearance-none border border-stone-300 bg-cream-50 py-2 pl-4 pr-10 text-base transition-colors md:text-sm hover:border-aubergine-700"
-            >
-              {SORTS.map(([v, l]) => (
-                <option key={v} value={v}>{l}</option>
-              ))}
-            </select>
-            <svg aria-hidden viewBox="0 0 10 6" className="pointer-events-none absolute right-4 w-2.5 text-ink-soft"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>
-          </label>
+          <Dropdown
+            size="sm"
+            aria-label="Sort by"
+            sheetTitle="Sort by"
+            value={sort}
+            onChange={(v) => set("sort", v === "featured" ? null : v)}
+            options={SORTS.map(([v, l]) => ({ value: v, label: l }))}
+            className="min-h-11 min-w-[11.5rem] rounded-none bg-cream-50 hover:border-aubergine-700"
+          />
         </div>
       </div>
       <AnimatePresence initial={false}>

@@ -112,3 +112,27 @@ html.lenis, html.lenis body { height: auto; }
     scroll-behavior: auto !important;
   }
 }
+
+/* ───────────────────────── Custom scrollbars (never the browser default) */
+html { scrollbar-width: thin; scrollbar-color: var(--color-aubergine-300) transparent; }
+* { scrollbar-width: thin; scrollbar-color: rgb(116 65 139 / 0.35) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgb(116 65 139 / 0.35);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background-color: rgb(74 29 92 / 0.6); }
+::-webkit-scrollbar-corner { background: transparent; }
+/* Hidden-until-hover variant for small panels (dropdowns, drawers) */
+.bq-scroll { scrollbar-color: transparent transparent; }
+.bq-scroll:hover { scrollbar-color: rgb(116 65 139 / 0.35) transparent; }
+
+/* Native number spinners are replaced by our own steppers */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+/* Date/time inputs must never appear; DatePicker replaces them */
+input::-webkit-calendar-picker-indicator { display: none; }

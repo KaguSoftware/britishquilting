@@ -10,6 +10,9 @@ import InvoiceOrderEmail from "@/emails/invoice-order";
 import DispatchedEmail from "@/emails/dispatched";
 import ReadyForCollectionEmail from "@/emails/ready-for-collection";
 import RefundedEmail from "@/emails/refunded";
+import OrderCancelledEmail from "@/emails/order-cancelled";
+import PaymentReceivedEmail from "@/emails/payment-received";
+import DeliveredEmail from "@/emails/delivered";
 import { TradeApprovedEmail, TradeRejectedEmail } from "@/emails/trade";
 import { BackInStockEmail, LowStockEmail } from "@/emails/stock";
 import WelcomeNewsletterEmail from "@/emails/welcome-newsletter";
@@ -281,6 +284,98 @@ export async function sendRefunded(orderId: string, amountPence?: number) {
     return false;
   }
 }
+
+/** Order cancelled. Sent once per order. */
+export async function sendOrderCancelled(orderId: string, reason?: string | null) {
+  try {
+    if (await alreadySent(orderId, "cancelled")) return true;
+    const data = await loadOrder(orderId);
+    if (!data) return false;
+    const { data: paid } = await data.db.from("orders").select("paid_at").eq("id", orderId).maybeSingle();
+    const ok = await sendEmail({
+      to: data.order.email,
+      subject: `Order #${data.order.number} has been cancelled`,
+      react: OrderCancelledEmail({
+        number: data.order.number,
+        firstName: data.props.firstName,
+        lines: data.props.lines,
+        wasPaid: Boolean(paid?.paid_at),
+        reason: reason?.trim() || null,
+        orderUrl: data.props.orderUrl,
+      }),
+    });
+    await logEmail(orderId, "cancelled", ok);
+    return ok;
+  } catch (e) {
+    console.error("sendOrderCancelled", e);
+    return false;
+  }
+}
+
+/** Invoice (bank transfer) payment arrived. Sent once per order. */
+export async function sendPaymentReceived(orderId: string, reference?: string | null) {
+  try {
+    if (await alreadySent(orderId, "payment-received")) return true;
+    const data = await loadOrder(orderId);
+    if (!data) return false;
+    const ok = await sendEmail({
+      to: data.order.email,
+      subject: `Payment received for order #${data.order.number}`,
+      react: PaymentReceivedEmail({
+        number: data.order.number,
+        firstName: data.props.firstName,
+        amount: data.order.total_pence,
+        reference: reference?.trim() || null,
+        orderUrl: data.props.orderUrl,
+      }),
+    });
+    await logEmail(orderId, "payment-received", ok);
+    return ok;
+  } catch (e) {
+    console.error("sendPaymentReceived", e);
+    return false;
+  }
+}
+
+async function sendArrived(orderId: string, kind: "delivered" | "collected") {
+  try {
+    if (await alreadySent(orderId, kind)) return true;
+    const data = await loadOrder(orderId);
+    if (!data) return false;
+    const { data: first } = await data.db
+      .from("order_items")
+      .select("products(slug)")
+      .eq("order_id", orderId)
+      .eq("is_swatch", false)
+      .not("product_id", "is", null)
+      .limit(1)
+      .maybeSingle();
+    const product = first?.products as { slug: string } | { slug: string }[] | null | undefined;
+    const slug = Array.isArray(product) ? product[0]?.slug : product?.slug;
+    const ok = await sendEmail({
+      to: data.order.email,
+      subject: kind === "collected" ? `Thank you for collecting order #${data.order.number}` : `Order #${data.order.number} has arrived`,
+      react: DeliveredEmail({
+        number: data.order.number,
+        firstName: data.props.firstName,
+        kind,
+        lines: data.props.lines,
+        reviewUrl: slug ? `${site()}/product/${slug}#reviews` : null,
+        orderUrl: data.props.orderUrl,
+      }),
+    });
+    await logEmail(orderId, kind, ok);
+    return ok;
+  } catch (e) {
+    console.error("sendArrived", e);
+    return false;
+  }
+}
+
+/** Thank-you with a review link once a courier order has arrived. Sent once. */
+export const sendDelivered = (orderId: string) => sendArrived(orderId, "delivered");
+/** Thank-you with a review link once the customer has collected. Sent once. */
+export const sendCollected = (orderId: string) => sendArrived(orderId, "collected");
 
 export async function sendTradeDecision(userId: string, approved: boolean) {
   try {

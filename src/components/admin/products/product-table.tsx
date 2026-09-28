@@ -51,7 +51,7 @@ function Row({ p }: { p: ProductRow }) {
   const { run, pending } = useAction();
   const [active, setActive] = useState(p.is_active);
   const img = storageUrl(p.image);
-  const unit = p.sale_mode === "unit" ? "" : "m";
+  const unit = p.sale_mode === "unit" ? "" : p.sale_mode === "roll" ? "rolls" : "m";
 
   return (
     <tr className="grid grid-cols-[56px_1fr_auto] items-center gap-x-3 gap-y-2 px-4 py-3 md:table-row md:p-0">
@@ -158,7 +158,8 @@ function StockCell({ p, unit }: { p: ProductRow; unit: string }) {
           inputMode="decimal"
           aria-label={`Stock for ${p.name}`}
           className={cn(
-            "h-9 w-24 rounded-[3px] border bg-white pl-2.5 pr-6 text-sm tabular-nums focus:border-aubergine-500 focus:outline-none",
+            unit.length > 1 ? "pr-11" : "pr-6",
+            "h-9 w-24 rounded-[3px] border bg-white pl-2.5 text-sm tabular-nums focus:border-aubergine-500 focus:outline-none",
             saved <= 0 ? "border-danger/40 text-danger" : low ? "border-gold-500" : "border-ink/15",
           )}
         />

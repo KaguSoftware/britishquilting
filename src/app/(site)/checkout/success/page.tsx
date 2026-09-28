@@ -33,6 +33,7 @@ type Order = {
   discount_code: string | null;
   invoice_due_at: string | null;
   access_token: string;
+  paid_at: string | null;
 };
 
 type State = "paid" | "processing" | "failed" | "invoice";
@@ -64,7 +65,8 @@ async function load(orderId: string | undefined, token: string | undefined) {
     .from("order_items")
     .select("id, name, image_path, sale_mode, is_swatch, length_m, quantity, line_total_pence")
     .eq("order_id", order.id);
-  return { order, items: items ?? [], state };
+  const { data: settings } = await db.from("store_settings").select("bank_details, collection_address, collection_hours").eq("id", 1).maybeSingle();
+  return { order, items: items ?? [], state, settings };
 }
 
 export default async function SuccessPage({ searchParams }: PageProps<"/checkout/success">) {
@@ -88,7 +90,8 @@ export default async function SuccessPage({ searchParams }: PageProps<"/checkout
     );
   }
 
-  const { order, items, state } = data;
+  const { order, items, state, settings } = data;
+  const bankDetails = state === "invoice" && !order.paid_at ? settings?.bank_details?.trim() || null : null;
   const collecting = order.fulfilment === "collection";
   const guest = !order.user_id;
 
@@ -168,7 +171,11 @@ export default async function SuccessPage({ searchParams }: PageProps<"/checkout
             <div>
               <h3 className="text-sm font-medium">{collecting ? "Collection" : "Delivering to"}</h3>
               {collecting ? (
-                <p className="mt-2 text-sm text-ink-soft">Our London workroom. Full address and opening hours are in your confirmation email.</p>
+                <p className="mt-2 whitespace-pre-line text-sm text-ink-soft">
+                  {settings?.collection_address || "Our London workroom."}
+                  {settings?.collection_hours ? `
+${settings.collection_hours}` : ""}
+                </p>
               ) : (
                 addr && (
                   <address className="mt-2 text-sm not-italic leading-relaxed text-ink-soft">
@@ -197,6 +204,14 @@ export default async function SuccessPage({ searchParams }: PageProps<"/checkout
               </p>
             </div>
           </div>
+
+          {bankDetails && (
+            <div className="mt-10 border-l-2 border-gold-500 bg-cream-50 px-6 py-5">
+              <h3 className="text-sm font-medium">Pay by bank transfer</h3>
+              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{bankDetails}</p>
+              <p className="mt-2 text-sm text-ink-soft">Please use No. {order.number} as the payment reference.</p>
+            </div>
+          )}
 
           {guest ? (
             <div className="mt-14 border-l-2 border-gold-500 bg-cream-50 px-6 py-6">

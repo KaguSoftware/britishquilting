@@ -3,7 +3,8 @@
 import { useActionState, useId } from "react";
 import { IconCheck } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
+import { Dropdown } from "@/components/ui/dropdown";
 import { Field, FormMessage } from "@/components/ui/field";
 import { applyForTrade, type FormState } from "@/lib/actions/account";
 
@@ -42,10 +43,13 @@ export function TradeForm({ defaultCompany }: { defaultCompany?: string | null }
           <Input {...aria("company_name")} autoComplete="organization" required defaultValue={defaultCompany ?? ""} />
         </Field>
         <Field id={id("business_type")} label="Type of business" error={fe?.business_type} className="sm:col-span-2">
-          <Select {...aria("business_type")} required defaultValue="">
-            <option value="" disabled>Choose one</option>
-            {BUSINESS_TYPES.map((t) => <option key={t}>{t}</option>)}
-          </Select>
+          <Dropdown
+            {...aria("business_type")}
+            required
+            placeholder="Choose one"
+            sheetTitle="Type of business"
+            options={BUSINESS_TYPES.map((t) => ({ value: t, label: t }))}
+          />
         </Field>
         <Field id={id("vat_number")} label="VAT number" optional error={fe?.vat_number} hint="If VAT registered">
           <Input {...aria("vat_number")} placeholder="GB 123 4567 89" className="uppercase" />

@@ -34,6 +34,7 @@ const productSchema = z
     price_pence: z.coerce.number().int().min(0, "Please set a price"),
     trade_price_pence: optInt,
     compare_at_pence: optInt,
+    cost_price_pence: optInt.optional(),
     min_length_m: optNum,
     length_step_m: optNum,
     max_length_m: optNum,
@@ -97,7 +98,7 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check the highlighted fields." };
   }
   const { db, viewer } = await staffDb();
-  const { images, isNew, id, ...p } = parsed.data;
+  const { images, isNew, id, cost_price_pence, ...p } = parsed.data;
   const slug = slugify(p.slug || p.name);
   if (!slug) return fail("Please give the product a name");
 
@@ -112,6 +113,8 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
     length_step_m: p.sale_mode === "metre" ? p.length_step_m : null,
     max_length_m: p.sale_mode === "metre" ? p.max_length_m : null,
     roll_length_m: p.sale_mode === "roll" ? p.roll_length_m : null,
+    // Cost price is private to the owner; staff saves leave it untouched.
+    ...(viewer.role === "owner" && cost_price_pence !== undefined ? { cost_price_pence } : {}),
   };
 
   let before = 0;

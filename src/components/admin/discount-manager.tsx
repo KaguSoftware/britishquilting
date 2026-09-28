@@ -7,6 +7,7 @@ import { deleteDiscount, restoreDiscount, saveDiscount, setDiscountActive } from
 import { cn } from "@/lib/utils";
 import { discountState, discountSummary, penceToPounds, poundsToPence, type DiscountRow } from "./format";
 import { CopyButton, Modal, Segmented, Switch, useAction, useConfirm } from "./controls";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Badge, Button, EmptyState, Field, Input, MoneyInput, UnitInput } from "./ui";
 
 export function DiscountManager({ discounts, startNew }: { discounts: DiscountRow[]; startNew: boolean }) {
@@ -152,10 +153,10 @@ function DiscountForm({ initial, onDone }: { initial: DiscountRow | null; onDone
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Starts (optional)" htmlFor="dstart" hint="Leave empty to start now.">
-          <Input id="dstart" type="date" value={starts} onChange={(e) => setStarts(e.target.value)} />
+          <DatePicker id="dstart" value={starts || null} onChange={(v) => { setStarts(v ?? ""); if (v && ends && ends < v) setEnds(""); }} placeholder="Starts now" />
         </Field>
         <Field label="Ends (optional)" htmlFor="dend" hint="Leave empty to run until you switch it off.">
-          <Input id="dend" type="date" value={ends} onChange={(e) => setEnds(e.target.value)} />
+          <DatePicker id="dend" value={ends || null} onChange={(v) => setEnds(v ?? "")} min={starts || undefined} placeholder="No end date" />
         </Field>
       </div>
 

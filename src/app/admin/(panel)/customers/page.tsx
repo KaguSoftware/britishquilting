@@ -4,6 +4,7 @@ import { staffDb } from "@/lib/actions/admin/guard";
 import { formatPence } from "@/lib/utils";
 import { Badge, EmptyState, PageHeader } from "@/components/admin/ui";
 import { formatDate } from "@/components/admin/format";
+import { Dropdown } from "@/components/ui/dropdown";
 
 export const metadata = { title: "Customers" };
 
@@ -34,10 +35,18 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       <PageHeader title="Customers" description={`${rows.length} account${rows.length === 1 ? "" : "s"}. Guests who checked out without an account appear on their orders only.`} />
       <form className="mb-5 flex flex-wrap gap-2" action="/admin/customers">
         <input name="q" defaultValue={sp.q} placeholder="Name, email or company" className="h-12 min-w-0 flex-1 basis-full rounded-[3px] border border-ink/15 bg-white px-3 text-base sm:basis-auto lg:h-10 lg:max-w-sm lg:text-sm" />
-        <select name="sort" defaultValue={sp.sort ?? ""} className="h-12 rounded-[3px] border border-ink/15 bg-white px-2 text-sm lg:h-10">
-          <option value="">Newest first</option>
-          <option value="spent">Spent the most</option>
-        </select>
+        <Dropdown
+          name="sort"
+          size="sm"
+          aria-label="Sort customers"
+          sheetTitle="Sort customers"
+          defaultValue={sp.sort === "spent" ? "spent" : ""}
+          options={[
+            { value: "", label: "Newest first" },
+            { value: "spent", label: "Spent the most" },
+          ]}
+          className="h-12 min-w-44 rounded-[3px] border-ink/15 bg-white text-sm lg:h-10"
+        />
         <button className="h-12 rounded-[3px] border border-ink/15 bg-cream-50 px-4 text-sm lg:h-10">Find</button>
       </form>
 

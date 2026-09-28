@@ -6,7 +6,8 @@ import { IconPlus, IconTrash } from "@/components/icons";
 import { saveShipping } from "@/lib/actions/admin/store";
 import { CARRIERS, penceToPounds, poundsToPence } from "./format";
 import { SaveBar, Switch, SwitchRow, useAction, useUnsavedGuard } from "./controls";
-import { Card, Field, Input, MoneyInput, Select, UnitInput } from "./ui";
+import { Card, Field, Input, MoneyInput, UnitInput } from "./ui";
+import { Dropdown } from "@/components/ui/dropdown";
 
 type Rate = {
   id?: string;
@@ -82,13 +83,7 @@ export function ShippingEditor({ rates, freeThreshold }: { rates: DbRate[]; free
                   <Input id={`n-${r.key}`} value={r.name} onChange={(e) => update(r.key, { name: e.target.value })} placeholder="e.g. Royal Mail Tracked 48" />
                 </Field>
                 <Field label="Courier" htmlFor={`c-${r.key}`}>
-                  <Select id={`c-${r.key}`} value={r.carrier} onChange={(e) => update(r.key, { carrier: e.target.value })}>
-                    {CARRIERS.map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </Select>
+                  <Dropdown id={`c-${r.key}`} value={r.carrier} onChange={(v) => update(r.key, { carrier: v })} sheetTitle="Courier" options={CARRIERS.map((c) => ({ value: c.value, label: c.label }))} />
                 </Field>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">

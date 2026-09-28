@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { IconCheck } from "@/components/icons";
 import { sendContact, type FormState } from "@/lib/actions/shop";
 import { cn } from "@/lib/utils";
+import { RadioCard } from "@/components/ui/choice";
 import { Label, btnPrimary, inputCls } from "./bits";
 
 const TOPICS = [
@@ -31,12 +32,7 @@ export function ContactForm() {
         <legend className="mb-3 text-sm font-medium">What&apos;s it about?</legend>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {TOPICS.map(([v, l], i) => (
-            <label key={v} className="relative cursor-pointer">
-              <input type="radio" name="topic" value={v} defaultChecked={i === 0} className="peer sr-only" />
-              <span className="flex min-h-12 items-center justify-center border border-stone-300 bg-cream-50 px-3 text-center text-sm transition-colors peer-checked:border-aubergine-700 peer-checked:bg-aubergine-700 peer-checked:text-cream-50 peer-focus-visible:outline-2 peer-focus-visible:outline-gold-500">
-                {l}
-              </span>
-            </label>
+            <RadioCard key={v} name="topic" value={v} defaultChecked={i === 0} title={l} className="min-h-12 items-center px-3 py-2.5" />
           ))}
         </div>
       </fieldset>

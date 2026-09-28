@@ -7,7 +7,9 @@ import { deleteProduct, saveProduct } from "@/lib/actions/admin/products";
 import { cn, formatPence, slugify, storageUrl } from "@/lib/utils";
 import { poundsToPence } from "../format";
 import { SaveBar, Segmented, SwitchRow, useAction, useConfirm, useUnsavedGuard } from "../controls";
-import { Button, Field, Input, MoneyInput, Select, Textarea, UnitInput } from "../ui";
+import { Button, Field, Input, MoneyInput, Textarea, UnitInput } from "../ui";
+import { ColourPicker } from "@/components/ui/colour-picker";
+import { Dropdown } from "@/components/ui/dropdown";
 import { ImageManager } from "./image-manager";
 import type { ProductForm } from "./product-form";
 
@@ -15,7 +17,7 @@ import type { ProductForm } from "./product-form";
 
 const MODES = {
   metre: { label: "By the metre", unit: "per metre", explain: "Customers type the length they need and you cut it from the roll. Stock is counted in metres." },
-  roll: { label: "By the roll", unit: "per roll", explain: "Customers buy whole rolls. Stock is counted in metres, so each roll sold takes its length off." },
+  roll: { label: "By the roll", unit: "per roll", explain: "Customers buy whole rolls. Stock is counted in whole rolls, so each roll sold takes one off." },
   unit: { label: "Each", unit: "each", explain: "For things sold as single items, like packs, tapes or tools. Stock is counted in items." },
 } as const;
 
@@ -23,10 +25,13 @@ export function ProductEditor({
   initial,
   isNew,
   categories,
+  showCost = false,
 }: {
   initial: ProductForm;
   isNew: boolean;
   categories: { id: string; name: string }[];
+  /** Owner only: the private cost price field. */
+  showCost?: boolean;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -45,7 +50,8 @@ export function ProductEditor({
     });
 
   const mode = MODES[form.sale_mode];
-  const stockUnit = form.sale_mode === "unit" ? "items" : "m";
+  const stockUnit = form.sale_mode === "unit" ? "items" : form.sale_mode === "roll" ? "rolls" : "m";
+  const costUnit = form.sale_mode === "metre" ? "metre" : form.sale_mode === "roll" ? "roll" : "unit";
 
   const save = async () => {
     const res = await run(
@@ -62,6 +68,7 @@ export function ProductEditor({
           price_pence: poundsToPence(form.price) ?? -1,
           trade_price_pence: poundsToPence(form.trade_price),
           compare_at_pence: poundsToPence(form.compare_at),
+          ...(showCost ? { cost_price_pence: poundsToPence(form.cost_price) } : {}),
           min_length_m: form.min_length_m,
           length_step_m: form.length_step_m,
           max_length_m: form.max_length_m,
@@ -169,6 +176,12 @@ export function ProductEditor({
             </Field>
           )}
 
+          {showCost && (
+            <Field label={`Cost price per ${costUnit} (optional)`} htmlFor="cost" hint={`What you paid per ${costUnit}, private. Only you see this, it works out your profit.`} className="sm:max-w-xs">
+              <MoneyInput id="cost" value={form.cost_price} onChange={(e) => set("cost_price", e.target.value)} placeholder="0.00" />
+            </Field>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Was price (optional)" htmlFor="compare" hint="Shows the old price crossed out, for a sale.">
               <MoneyInput id="compare" value={form.compare_at} onChange={(e) => set("compare_at", e.target.value)} placeholder="0.00" />
@@ -183,7 +196,7 @@ export function ProductEditor({
           <SwitchRow checked={form.track_stock} onChange={(v) => set("track_stock", v)} title="Keep count of stock" description="Turn off for things you can always get more of. When on, it can't be sold once it runs out." />
           {form.track_stock && (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="How much you have" htmlFor="stock" hint={form.sale_mode === "unit" ? "Number of items." : "Total metres in stock."}>
+              <Field label="How much you have" htmlFor="stock" hint={form.sale_mode === "unit" ? "Number of items." : form.sale_mode === "roll" ? "Number of whole rolls." : "Total metres in stock."}>
                 <UnitInput unit={stockUnit} id="stock" value={form.stock_qty} onChange={(e) => set("stock_qty", e.target.value.replace(/[^\d.]/g, ""))} className="text-lg" />
               </Field>
               <Field label="Warn me when it drops to" htmlFor="low" hint="It shows as 'Low stock' on your Today page.">
@@ -203,23 +216,17 @@ export function ProductEditor({
         </Section>
 
         <Section title="Fabric details">
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-            <Field label="Colour name" htmlFor="colour">
-              <Input id="colour" value={form.colour} onChange={(e) => set("colour", e.target.value)} placeholder="e.g. Ivory" />
-            </Field>
-            <Field label="Colour shade" htmlFor="hex">
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  id="hex"
-                  value={form.colour_hex || "#f6f1e7"}
-                  onChange={(e) => set("colour_hex", e.target.value)}
-                  className="h-11 w-14 cursor-pointer rounded-[3px] border border-stone-300 bg-white p-1"
-                />
-                <Input value={form.colour_hex} onChange={(e) => set("colour_hex", e.target.value)} placeholder="#ffffff" className="w-28 font-mono text-sm" aria-label="Colour code" />
-              </div>
-            </Field>
-          </div>
+          <Field label="Colour name" htmlFor="colour">
+            <Input id="colour" value={form.colour} onChange={(e) => set("colour", e.target.value)} placeholder="e.g. Ivory" className="sm:max-w-sm" />
+          </Field>
+          <Field label="Colour shade" htmlFor="hex" hint="Pick the nearest tone, or paste an exact code.">
+            <ColourPicker
+              id="hex"
+              value={form.colour_hex}
+              onChange={(hex) => set("colour_hex", hex)}
+              onPickName={(name) => !form.colour.trim() && set("colour", name)}
+            />
+          </Field>
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Made from" htmlFor="comp">
               <Input id="comp" value={form.composition} onChange={(e) => set("composition", e.target.value)} placeholder="e.g. 100% cotton" />
@@ -238,14 +245,13 @@ export function ProductEditor({
 
         <Section title="Where it appears">
           <Field label="Category" htmlFor="cat">
-            <Select id="cat" value={form.category_id} onChange={(e) => set("category_id", e.target.value)}>
-              <option value="">No category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
+            <Dropdown
+              id="cat"
+              value={form.category_id}
+              onChange={(v) => set("category_id", v)}
+              sheetTitle="Category"
+              options={[{ value: "", label: "No category" }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
+            />
           </Field>
           <SwitchRow checked={form.is_active} onChange={(v) => set("is_active", v)} title="Show on the shop" description="When off, only staff can see it. Handy while you're still adding photos." />
           <SwitchRow checked={form.is_featured} onChange={(v) => set("is_featured", v)} title="Feature on the home page" />

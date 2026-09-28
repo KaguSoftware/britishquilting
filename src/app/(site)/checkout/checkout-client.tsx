@@ -11,6 +11,8 @@ import type { CheckoutInput } from "@/lib/actions/checkout";
 import { isUkPhone, isValidUkPostcode, normalisePostcode } from "@/lib/checkout/helpers";
 import { Field, FormMessage } from "@/components/ui/field";
 import { Input, Textarea } from "@/components/ui/input";
+import { RadioCard } from "@/components/ui/choice";
+import { Disclosure } from "@/components/ui/disclosure";
 import { ButtonLink } from "@/components/ui/button";
 import { IconBasket, IconCheck, IconChevronDown, IconLock, IconPin, IconVan } from "@/components/icons";
 import { cn, formatPence } from "@/lib/utils";
@@ -382,7 +384,7 @@ export function CheckoutClient({ viewer, addresses, collection, invoiceTermsDays
                   {addresses.length > 0 && (
                     <fieldset className="mt-6">
                       <legend className="mb-3 text-sm font-medium">Deliver to</legend>
-                      <div className="divide-y divide-stone-300 border-y border-stone-300">
+                      <div className="space-y-2">
                         {addresses.map((a) => (
                           <RadioRow
                             key={a.id}
@@ -464,14 +466,15 @@ export function CheckoutClient({ viewer, addresses, collection, invoiceTermsDays
               )}
             </AnimatePresence>
 
-            <details className="group mt-8">
-              <summary className="flex cursor-pointer list-none items-center gap-2 text-sm text-aubergine-700 hover:text-aubergine-900">
-                <IconChevronDown className="size-4 transition-transform group-open:rotate-180" /> Add a note for our cutting room
-              </summary>
+            <Disclosure
+              className="mt-8"
+              buttonClassName="w-auto justify-start gap-2 text-sm text-aubergine-700 hover:text-aubergine-900"
+              summary="Add a note for our cutting room"
+            >
               <Field id="f-note" label="Order note" optional className="mt-4">
                 <Textarea id="f-note" rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Delivery instructions, or anything about your cuts." />
               </Field>
-            </details>
+            </Disclosure>
           </Step>
 
           {/* 03 Payment */}
@@ -560,20 +563,9 @@ function Step({ n, title, id, children, last }: { n: string; title: string; id: 
 
 function RadioRow({ name, checked, onChange, children, aside }: { name: string; checked: boolean; onChange: () => void; children: React.ReactNode; aside?: React.ReactNode }) {
   return (
-    <label className={cn("flex cursor-pointer items-center gap-4 px-1 py-4 transition-colors duration-200", checked ? "bg-cream-50" : "hover:bg-cream-50/60")}>
-      <input type="radio" name={name} checked={checked} onChange={onChange} className="peer sr-only" />
-      <span
-        aria-hidden
-        className={cn(
-          "grid size-5 shrink-0 place-items-center rounded-full border transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-gold-500",
-          checked ? "border-aubergine-700" : "border-stone-500/60",
-        )}
-      >
-        <span className={cn("size-2.5 rounded-full bg-aubergine-700 transition-transform duration-200", checked ? "scale-100" : "scale-0")} />
-      </span>
-      <span className="min-w-0 flex-1">{children}</span>
-      {aside}
-    </label>
+    <RadioCard name={name} checked={checked} onChange={onChange} aside={aside} className="items-center">
+      {children}
+    </RadioCard>
   );
 }
 
@@ -664,7 +656,7 @@ function RateList({
     );
   return (
     <>
-      <div id="f-rate" tabIndex={-1} className={cn("divide-y divide-stone-300 border-y border-stone-300 outline-none", quoting && "opacity-70")}>
+      <div id="f-rate" tabIndex={-1} className={cn("space-y-2 outline-none", quoting && "opacity-70")}>
         {quote.rates.map((r) => (
           <RadioRow
             key={r.id}

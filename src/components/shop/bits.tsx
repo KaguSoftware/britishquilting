@@ -1,5 +1,6 @@
 import Link from "next/link";
-import {IconChevronRight, IconPlus, IconStar} from "@/components/icons";
+import {IconChevronRight, IconStar} from "@/components/icons";
+import { Disclosure } from "@/components/ui/disclosure";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Reveal } from "@/components/site/reveal";
@@ -90,16 +91,19 @@ export function PageHeader({
   );
 }
 
-/** Accessible native disclosure, styled. */
+/** Accessible disclosure (button + animated region), styled for FAQs. */
 export function Accordion({ title, children, defaultOpen }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
   return (
-    <details className="group border-b border-stone-300" open={defaultOpen}>
-      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 py-4 text-left [&::-webkit-details-marker]:hidden">
-        <span className="font-display text-2xl">{title}</span>
-        <IconPlus aria-hidden className="size-4 shrink-0 text-gold-600 transition-transform duration-500 ease-(--ease-silk) group-open:rotate-45" />
-      </summary>
-      <div className="pb-6 text-[0.95rem] leading-relaxed text-ink-soft">{children}</div>
-    </details>
+    <Disclosure
+      defaultOpen={defaultOpen}
+      className="border-b border-stone-300"
+      buttonClassName="min-h-14 py-4"
+      iconClassName="text-gold-600"
+      panelClassName="pb-6 text-[0.95rem] leading-relaxed text-ink-soft"
+      summary={<span className="font-display text-2xl">{title}</span>}
+    >
+      {children}
+    </Disclosure>
   );
 }
 

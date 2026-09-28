@@ -18,21 +18,6 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
   return <textarea ref={ref} rows={rows} className={cn(inputClasses, "py-2.5 leading-relaxed", className)} {...props} />;
 });
 
-const chevron =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%234b4250' stroke-width='1.5' fill='none'/></svg>\")";
-
-export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(function Select(
-  { className, children, style, ...props },
-  ref,
-) {
-  return (
-    <select
-      ref={ref}
-      className={cn(inputClasses, "h-11 appearance-none bg-[length:12px] bg-[right_0.9rem_center] bg-no-repeat pr-9", className)}
-      style={{ backgroundImage: chevron, ...style }}
-      {...props}
-    >
-      {children}
-    </select>
-  );
-});
+/** Native-select API over the bespoke Dropdown (reads <option> children). */
+export { Select } from "./select";
+export type { SelectChange, SelectProps } from "./select";

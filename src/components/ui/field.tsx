@@ -75,19 +75,5 @@ export function FormMessage({ tone = "error", children, className }: { tone?: "e
   );
 }
 
-export function Checkbox({
-  className,
-  label,
-  description,
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & { label: React.ReactNode; description?: React.ReactNode }) {
-  return (
-    <label className={cn("flex cursor-pointer items-start gap-3", className)}>
-      <input type="checkbox" className="mt-0.5 size-4 shrink-0 cursor-pointer accent-aubergine-700" {...props} />
-      <span className="text-sm leading-snug">
-        <span className="text-ink">{label}</span>
-        {description && <span className="mt-0.5 block text-ink-soft">{description}</span>}
-      </span>
-    </label>
-  );
-}
+/** Custom checkbox (see ./choice). Same props as before: label, description, and any input prop. */
+export { Checkbox } from "./choice";

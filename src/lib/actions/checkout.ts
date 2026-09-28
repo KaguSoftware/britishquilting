@@ -11,6 +11,7 @@ import { createPayPalOrder, paypalConfigured } from "@/lib/paypal";
 import { addDays, cartFingerprint, isUkPhone, isValidUkPostcode, normalisePostcode } from "@/lib/checkout/helpers";
 import { afterCommit } from "@/lib/checkout/finalise";
 import { sendInvoiceOrder } from "@/lib/email";
+import { revalidateStorefront } from "@/lib/orders/revalidate";
 
 const text = (max: number) => z.string().trim().max(max);
 
@@ -236,7 +237,7 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
           data: { status: "processing" },
         });
         await afterCommit(created.id, discount?.code ?? null, email);
-        await incrementDiscountUse(discount?.code ?? null);
+        revalidateStorefront(); // stock was reserved and the discount use counted inside reserve_order_stock
         await sendInvoiceOrder(created.id);
         return { ok: true, orderId: created.id, number: created.number, total: q.total, provider: "invoice", successUrl: successUrl(created) };
       }
@@ -291,11 +292,4 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
 
 function successUrl(o: { id: string; access_token: string }) {
   return `/checkout/success?order=${o.id}&token=${o.access_token}`;
-}
-
-async function incrementDiscountUse(code: string | null) {
-  if (!code) return;
-  const db = createAdminClient();
-  const { data } = await db.from("discount_codes").select("id, uses").eq("code", code).maybeSingle();
-  if (data) await db.from("discount_codes").update({ uses: data.uses + 1 }).eq("id", data.id).eq("uses", data.uses);
 }

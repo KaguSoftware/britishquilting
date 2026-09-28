@@ -4,6 +4,7 @@ import { staffDb } from "@/lib/actions/admin/guard";
 import { cn } from "@/lib/utils";
 import { ButtonLink, EmptyState, PageHeader } from "@/components/admin/ui";
 import { ProductTable, type ProductRow } from "@/components/admin/products/product-table";
+import { Dropdown } from "@/components/ui/dropdown";
 
 export const metadata = { title: "Products" };
 
@@ -103,14 +104,15 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         </nav>
         <form className="flex flex-wrap gap-2" action="/admin/products">
           {filter !== "all" && <input type="hidden" name="filter" value={filter} />}
-          <select name="category" defaultValue={sp.category ?? ""} className="h-10 rounded-[3px] border border-ink/15 bg-white px-2 text-sm">
-            <option value="">All categories</option>
-            {(categories ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <Dropdown
+            name="category"
+            size="sm"
+            aria-label="Category"
+            sheetTitle="Category"
+            defaultValue={sp.category ?? ""}
+            options={[{ value: "", label: "All categories" }, ...(categories ?? []).map((c) => ({ value: String(c.id), label: c.name as string }))]}
+            className="min-w-48 rounded-[3px] border-ink/15 bg-white text-sm"
+          />
           <input name="q" defaultValue={sp.q} placeholder="Search by name or colour" className="h-10 w-full rounded-[3px] border border-ink/15 bg-white px-3 text-sm lg:w-64" />
           <button className="h-10 rounded-[3px] border border-ink/15 bg-cream-50 px-3 text-sm">Find</button>
         </form>

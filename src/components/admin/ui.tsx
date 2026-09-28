@@ -1,5 +1,6 @@
 import Link from "next/link";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
+import { Select as UiSelect, type SelectProps } from "@/components/ui/select";
 import { IconArrowLeft } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { Tone } from "./format";
@@ -183,8 +184,9 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return <textarea className={cn(inputClass, "min-h-24 leading-relaxed", className)} {...props} />;
 }
 
-export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cn(inputClass, "appearance-auto pr-8", className)} {...props} />;
+/** Admin select: the bespoke Dropdown with a native-select API (reads <option> children). */
+export function Select(props: SelectProps) {
+  return <UiSelect {...props} />;
 }
 
 /** Money input with a £ prefix. Value is pounds as text. */
