@@ -1,9 +1,9 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, useTransition, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
-import { IconCheck, IconClose, IconCopy, IconWarning } from "@/components/icons";
+import { IconClose, IconWarning } from "@/components/icons";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ActionResult } from "@/lib/actions/admin/types";
@@ -273,34 +273,6 @@ export function useAction() {
   return { run, pending };
 }
 
-/* ───────────────────────── Copy button */
-export function CopyButton({ text, label = "Copy", className }: { text: string; label?: string; className?: string }) {
-  const [done, setDone] = useState(false);
-  const t = useRef<ReturnType<typeof setTimeout>>(undefined);
-  return (
-    <button
-      type="button"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setDone(true);
-          toast.success("Copied");
-          clearTimeout(t.current);
-          t.current = setTimeout(() => setDone(false), 1800);
-        } catch {
-          toast.error("Couldn't copy, please select the text instead.");
-        }
-      }}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-sm border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:border-aubergine-300 hover:text-aubergine-700",
-        className,
-      )}
-    >
-      {done ? <IconCheck className="size-3.5 text-success" /> : <IconCopy className="size-3.5" />}
-      {done ? "Copied" : label}
-    </button>
-  );
-}
 
 /* ───────────────────────── Unsaved changes guard */
 export function useUnsavedGuard(dirty: boolean) {

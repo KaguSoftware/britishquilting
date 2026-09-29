@@ -1,6 +1,14 @@
 import Link from "next/link";
+import { IconFacebook, IconInstagram, IconPinterest } from "@/components/icons";
 import { Crown } from "./brand";
 import { NewsletterForm } from "./newsletter-form";
+
+/** Add the real profile URL to show that platform in the footer. Left blank, it's hidden. */
+const SOCIAL = [
+  { label: "Instagram", href: "", Icon: IconInstagram },
+  { label: "Facebook", href: "", Icon: IconFacebook },
+  { label: "Pinterest", href: "", Icon: IconPinterest },
+].filter((s) => s.href);
 
 const COLS = [
   { title: "Shop", links: [["Linings", "/shop/linings"], ["Interlinings", "/shop/interlinings"], ["Paper", "/shop/paper"], ["Order samples", "/samples"]] },
@@ -36,6 +44,23 @@ export function Footer() {
             ))}
           </div>
         </div>
+        {SOCIAL.length > 0 && (
+          <ul className="mt-14 flex items-center gap-4" aria-label="Follow us">
+            {SOCIAL.map(({ label, href, Icon }) => (
+              <li key={label}>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="flex size-11 items-center justify-center text-cream-100/65 transition-colors hover:text-cream-50"
+                >
+                  <Icon className="size-5" strokeWidth={1.4} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="stitch mt-16 opacity-40" />
         <div className="mt-8 flex flex-col gap-4 text-xs text-cream-100/50 md:flex-row md:items-center md:justify-between">
           <p>© {new Date().getFullYear()} Intermode Limited, trading as British Quilting · London · Family-owned since 1990</p>

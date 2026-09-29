@@ -6,6 +6,7 @@ import { Reveal } from "@/components/site/reveal";
 import { ProductCard } from "@/components/shop/product-card";
 import { ProductGallery } from "@/components/shop/product-gallery";
 import { PurchasePanel } from "@/components/shop/purchase-panel";
+import { RecentlyViewedRail, RecordRecentlyViewed } from "@/components/shop/recently-viewed";
 import { ReviewForm } from "@/components/shop/review-form";
 import { WishlistToggle } from "@/components/shop/wishlist-toggle";
 import { Accordion, Breadcrumbs, Stars } from "@/components/shop/bits";
@@ -82,6 +83,23 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
       : {}),
   };
 
+  const breadcrumbItems: { href?: string; label: string }[] = [
+    { href: "/", label: "Home" },
+    { href: "/shop", label: "Shop" },
+    ...(category ? [{ href: `/shop/${category.slug}`, label: category.name }] : []),
+    { label: p.name },
+  ];
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: breadcrumbItems.map((item, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: item.label,
+      ...(item.href ? { item: `${siteUrl}${item.href}` } : {}),
+    })),
+  };
+
   const specs: [string, string | null][] = [
     ["Composition", p.composition],
     ["Width", p.width_cm ? `${p.width_cm}cm` : null],
@@ -93,15 +111,12 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, "\\u003c") }} />
+      <RecordRecentlyViewed productId={p.id} />
 
       <div className="mx-auto max-w-7xl px-4 pt-24 md:px-8 md:pt-32">
         <Breadcrumbs
-          items={[
-            { href: "/", label: "Home" },
-            { href: "/shop", label: "Shop" },
-            ...(category ? [{ href: `/shop/${category.slug}`, label: category.name }] : []),
-            { label: p.name },
-          ]}
+          items={breadcrumbItems}
         />
       </div>
 
@@ -287,6 +302,8 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
           </ul>
         </section>
       )}
+
+      <RecentlyViewedRail all={all} excludeId={p.id} />
     </>
   );
 }

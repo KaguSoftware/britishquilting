@@ -4,7 +4,7 @@ import { IconPrint } from "@/components/icons";
 import { staffDb } from "@/lib/actions/admin/guard";
 import { formatPence, storageUrl } from "@/lib/utils";
 import { Badge, ButtonLink, Card, PageHeader } from "@/components/admin/ui";
-import { CopyButton } from "@/components/admin/controls";
+import { CopyButton } from "@/components/ui/copy-button";
 import { ORDER_STATUS, addressLines, carrierLabel, cutInstruction, formatDateTime, type Address, type OrderStatus } from "@/components/admin/format";
 import { OrderActions } from "@/components/admin/orders/order-actions";
 import { OrderNotes } from "@/components/admin/orders/order-notes";

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn, storageUrl } from "@/lib/utils";
 import { FabricPlaceholder } from "./product-card";
 
@@ -20,6 +20,7 @@ export function ProductGallery({ images, hex, name, label }: { images: Img[]; he
   const [active, setActive] = useState(0);
   const [lens, setLens] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const strip = useRef<HTMLDivElement>(null);
   const c = hex ?? "#e8dcc4";
   const img = images[active];
   const src = img ? storageUrl(img.storage_path)! : null;
@@ -32,16 +33,40 @@ export function ProductGallery({ images, hex, name, label }: { images: Img[]; he
     setLens({ x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height });
   };
 
+  // Keep the thumbnail rail in sync while swiping the mobile strip.
+  useEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (el.clientWidth) setActive(Math.round(el.scrollLeft / el.clientWidth));
+      });
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  const select = (i: number) => {
+    setActive(i);
+    strip.current?.scrollTo({ left: i * strip.current.clientWidth, behavior: "smooth" });
+  };
+
   return (
     <div className="md:sticky md:top-28">
+      {/* Desktop: single image with the magnifying lens */}
       <div
         ref={box}
         onPointerMove={onMove}
         onPointerLeave={() => setLens(null)}
-        className="relative aspect-[4/5] cursor-crosshair overflow-hidden bg-cream-200 shadow-soft"
+        className="relative hidden aspect-[4/5] cursor-crosshair overflow-hidden bg-cream-200 shadow-soft md:block"
       >
         {src ? (
-          <Image src={src} alt={img!.alt ?? name} fill priority sizes="(min-width: 768px) 55vw, 100vw" className="object-cover" />
+          <Image src={src} alt={img!.alt ?? name} fill priority sizes="55vw" className="object-cover" />
         ) : (
           <>
             <FabricPlaceholder hex={c} name={name} />
@@ -80,13 +105,36 @@ export function ProductGallery({ images, hex, name, label }: { images: Img[]; he
         )}
         <p className="pointer-events-none absolute right-5 top-5 hidden text-xs italic text-ink-soft/80 md:block">Hover to inspect the weave</p>
       </div>
+
+      {/* Mobile: swipeable strip, one image per screen with scroll-snap */}
+      <div
+        ref={strip}
+        className="flex aspect-[4/5] snap-x snap-mandatory overflow-x-auto bg-cream-200 [-ms-overflow-style:none] [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden"
+      >
+        {(images.length ? images : [null]).map((im, i) => {
+          const s = im ? storageUrl(im.storage_path)! : null;
+          return (
+            <div key={im?.storage_path ?? "placeholder"} className="relative w-full shrink-0 snap-center">
+              {s ? (
+                <Image src={s} alt={im!.alt ?? name} fill priority={i === 0} sizes="100vw" className="object-cover" />
+              ) : (
+                <>
+                  <FabricPlaceholder hex={c} name={name} />
+                  <span className="sr-only">{name}, colour sample. Photography coming soon.</span>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       {images.length > 1 && (
         <ul className="mt-3 grid grid-cols-5 gap-3" aria-label="Product images">
           {images.map((im, i) => (
             <li key={im.storage_path}>
               <button
                 type="button"
-                onClick={() => setActive(i)}
+                onClick={() => select(i)}
                 aria-label={`Show image ${i + 1}`}
                 aria-current={i === active}
                 className={cn("relative block aspect-square w-full overflow-hidden bg-cream-200 ring-offset-2 ring-offset-cream-100 transition", i === active ? "ring-1 ring-aubergine-700" : "opacity-70 hover:opacity-100")}

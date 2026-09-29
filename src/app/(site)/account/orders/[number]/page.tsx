@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { IconArrowLeft, IconExternal, IconPin, IconVan } from "@/components/icons";
 import { FabricPlaceholder } from "@/components/shop/product-card";
 import { OrderStatusBadge } from "@/components/ui/badge";
+import { CopyButton } from "@/components/ui/copy-button";
 import { formatDate, formatShortDate, formatTime, orderRef, requireViewer } from "@/lib/data/account";
 import { createClient } from "@/lib/supabase/server";
 import { cn, formatMetres, formatPence, storageUrl } from "@/lib/utils";
@@ -77,7 +78,10 @@ export default async function OrderDetailPage({ params }: PageProps<"/account/or
 
       <header className="mt-6 flex flex-wrap items-end justify-between gap-4 border-b-2 border-aubergine-900 pb-6">
         <div>
-          <h2 className="font-display text-4xl text-aubergine-900 md:text-5xl">Order {orderRef(order.number)}</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="font-display text-4xl text-aubergine-900 md:text-5xl">Order {orderRef(order.number)}</h2>
+            <CopyButton text={orderRef(order.number)} label="Copy" />
+          </div>
           <p className="mt-2 text-sm text-ink-soft">
             Placed {formatDate(order.created_at)} at {formatTime(order.created_at)}
             {order.is_trade && <span className="ml-2 border-l border-stone-300 pl-2 text-gold-600">Trade order</span>}

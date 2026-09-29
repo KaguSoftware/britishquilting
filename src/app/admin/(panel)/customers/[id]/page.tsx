@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { staffDb } from "@/lib/actions/admin/guard";
 import { formatPence } from "@/lib/utils";
 import { Badge, Card, PageHeader } from "@/components/admin/ui";
-import { CopyButton } from "@/components/admin/controls";
+import { CopyButton } from "@/components/ui/copy-button";
 import { ORDER_STATUS, addressLines, formatDate, type OrderStatus } from "@/components/admin/format";
 
 export const metadata = { title: "Customer" };

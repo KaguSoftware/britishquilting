@@ -2,6 +2,6 @@
 
 import { PageError } from "@/components/shop/page-error";
 
-export default function Error({ retry }: { error: Error & { digest?: string }; retry: () => void }) {
-  return <PageError retry={retry} />;
+export default function Error({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  return <PageError retry={reset} />;
 }
