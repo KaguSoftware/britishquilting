@@ -4,6 +4,7 @@ import {IconArrowRight} from "@/components/icons";
 import { Reveal } from "@/components/site/reveal";
 import { ProductCard } from "@/components/shop/product-card";
 import { FilterBar } from "@/components/shop/filter-bar";
+import { FilterPendingOverlay, FilterTransitionProvider } from "@/components/shop/filter-transition";
 import { Breadcrumbs, EmptyState, btnSecondary } from "@/components/shop/bits";
 import { applyFilters, buildFacets, parseFilters, type Category, type ListProduct } from "@/lib/data/shop";
 import { cn } from "@/lib/utils";
@@ -115,34 +116,38 @@ export function ShopListing({
       </header>
 
       <section className="mx-auto max-w-7xl px-4 pb-24 md:px-8 md:pb-32">
-        <Suspense fallback={<div className="h-[82px] border-b border-stone-300" />}>
-          <FilterBar facets={facets} count={results.length} total={products.length} />
-        </Suspense>
+        <FilterTransitionProvider>
+          <Suspense fallback={<div className="h-[82px] border-b border-stone-300" />}>
+            <FilterBar facets={facets} count={results.length} total={products.length} />
+          </Suspense>
 
-        {results.length > 0 ? (
-          <ul className="mt-10 grid grid-cols-2 gap-x-4 gap-y-12 md:mt-14 md:grid-cols-3 md:gap-x-6 lg:grid-cols-4">
-            {results.map((p, i) => (
-              <Reveal as="li" key={p.id} delay={(i % 4) * 0.06}>
-                <ProductCard p={p} sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw" />
-              </Reveal>
-            ))}
-          </ul>
-        ) : (
-          <div className="mt-12">
-            <EmptyState
-              title={hasFilters ? "Nothing matches just yet" : "This shelf is being restocked"}
-              action={
-                <Link href={hasFilters ? (category ? `/shop/${category.slug}` : "/shop") : "/contact"} className={btnSecondary}>
-                  {hasFilters ? "Clear filters" : "Ask the workroom"} <IconArrowRight className="size-4" />
-                </Link>
-              }
-            >
-              {hasFilters
-                ? "Try removing a filter or two. We also cut plenty of cloth that isn't online, so do ask."
-                : "We're cutting new stock for this range. Call or message and we'll tell you what's on the bolt today."}
-            </EmptyState>
-          </div>
-        )}
+          <FilterPendingOverlay>
+            {results.length > 0 ? (
+              <ul className="mt-10 grid grid-cols-2 gap-x-4 gap-y-12 md:mt-14 md:grid-cols-3 md:gap-x-6 lg:grid-cols-4">
+                {results.map((p, i) => (
+                  <Reveal as="li" key={p.id} delay={(i % 4) * 0.06}>
+                    <ProductCard p={p} sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw" />
+                  </Reveal>
+                ))}
+              </ul>
+            ) : (
+              <div className="mt-12">
+                <EmptyState
+                  title={hasFilters ? "Nothing matches just yet" : "This shelf is being restocked"}
+                  action={
+                    <Link href={hasFilters ? (category ? `/shop/${category.slug}` : "/shop") : "/contact"} className={btnSecondary}>
+                      {hasFilters ? "Clear filters" : "Ask the workroom"} <IconArrowRight className="size-4" />
+                    </Link>
+                  }
+                >
+                  {hasFilters
+                    ? "Try removing a filter or two. We also cut plenty of cloth that isn't online, so do ask."
+                    : "We're cutting new stock for this range. Call or message and we'll tell you what's on the bolt today."}
+                </EmptyState>
+              </div>
+            )}
+          </FilterPendingOverlay>
+        </FilterTransitionProvider>
       </section>
     </>
   );

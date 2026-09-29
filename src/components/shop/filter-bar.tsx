@@ -1,10 +1,11 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {IconCheck, IconFilter, IconClose} from "@/components/icons";
 import { Dropdown } from "@/components/ui/dropdown";
+import { useFilterTransition } from "./filter-transition";
 import { cn } from "@/lib/utils";
 
 type Facets = {
@@ -24,7 +25,7 @@ export function FilterBar({ facets, count, total }: { facets: Facets; count: num
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
-  const [pending, start] = useTransition();
+  const { pending, start } = useFilterTransition();
   const [open, setOpen] = useState(false);
 
   const get = (k: string) => (sp.get(k) ?? "").split(",").filter(Boolean);
