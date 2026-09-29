@@ -23,9 +23,11 @@ export function VatRateForm({ vatRate }: { vatRate: number }) {
   };
   return (
     <div>
-      <Field label="VAT rate" htmlFor="vr">
-        <UnitInput unit="%" id="vr" value={value} onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ""))} />
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="VAT rate" htmlFor="vr">
+          <UnitInput unit="%" id="vr" value={value} onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ""))} />
+        </Field>
+      </div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-stone-500">Set to 0 if you aren&apos;t VAT registered.</p>
         <Button variant="secondary" onClick={save} disabled={pending || !value || Number.isNaN(Number(value))}>

@@ -24,22 +24,34 @@ export function PeriodPicker({
   previousLabel,
   from,
   to,
+  onQuickSelect,
+  quickPending,
 }: {
   current: PeriodKey;
   label: string;
   previousLabel: string;
   from: string;
   to: string;
+  /** When given, a click on a non-custom tab goes through this (an instant, locally-cached switch) instead of a full navigation. */
+  onQuickSelect?: (key: Exclude<PeriodKey, "custom">) => void;
+  /** Set by the caller while an uncached quick-pick is still loading, so the trigger button's spinner reflects it too. */
+  quickPending?: boolean;
 }) {
   const router = useRouter();
   const params = useSearchParams();
   const [open, setOpen] = useState(false);
-  const [pending, start] = useTransition();
+  const [navPending, start] = useTransition();
+  const pending = navPending || Boolean(quickPending);
   const [custom, setCustom] = useState(current === "custom");
   const [a, setA] = useState<string | null>(from);
   const [b, setB] = useState<string | null>(to);
 
   const go = (key: PeriodKey, range?: { from: string; to: string }) => {
+    if (!range && key !== "custom" && onQuickSelect) {
+      setOpen(false);
+      onQuickSelect(key);
+      return;
+    }
     const q = new URLSearchParams(params.toString());
     q.delete("expense");
     q.set("p", key);
