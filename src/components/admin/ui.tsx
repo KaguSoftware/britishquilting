@@ -154,6 +154,7 @@ export function Field({
   htmlFor,
   children,
   className,
+  labelClassName,
 }: {
   label: ReactNode;
   hint?: ReactNode;
@@ -161,10 +162,12 @@ export function Field({
   htmlFor?: string;
   children: ReactNode;
   className?: string;
+  /** Reserve consistent height (e.g. "min-h-10" for up to 2 lines) so inputs line up across a row of Fields whose labels wrap differently. */
+  labelClassName?: string;
 }) {
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={htmlFor} className="text-sm font-medium text-ink">
+      <label htmlFor={htmlFor} className={cn("text-sm font-medium text-ink", labelClassName)}>
         {label}
       </label>
       {children}

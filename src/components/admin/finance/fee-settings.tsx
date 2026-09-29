@@ -45,19 +45,21 @@ export function FeeSettingsForm({ settings }: { settings: FeeSettings }) {
   return (
     <div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Stripe, percentage" htmlFor="sp">
+        {/* Reserve 2 lines of label height on every field: "Stripe, per payment" wraps where "VAT rate" doesn't, and
+            without this the inputs below drift out of line with each other depending on which labels wrap. */}
+        <Field label="Stripe, percentage" htmlFor="sp" labelClassName="min-h-10">
           <UnitInput unit="%" id="sp" value={f.stripe_pct} onChange={set("stripe_pct")} />
         </Field>
-        <Field label="Stripe, per payment" htmlFor="sf">
+        <Field label="Stripe, per payment" htmlFor="sf" labelClassName="min-h-10">
           <MoneyInput id="sf" value={f.stripe_fixed} onChange={set("stripe_fixed")} />
         </Field>
-        <Field label="PayPal, percentage" htmlFor="pp">
+        <Field label="PayPal, percentage" htmlFor="pp" labelClassName="min-h-10">
           <UnitInput unit="%" id="pp" value={f.paypal_pct} onChange={set("paypal_pct")} />
         </Field>
-        <Field label="PayPal, per payment" htmlFor="pf">
+        <Field label="PayPal, per payment" htmlFor="pf" labelClassName="min-h-10">
           <MoneyInput id="pf" value={f.paypal_fixed} onChange={set("paypal_fixed")} />
         </Field>
-        <Field label="VAT rate" htmlFor="vr">
+        <Field label="VAT rate" htmlFor="vr" labelClassName="min-h-10">
           <UnitInput unit="%" id="vr" value={vatRate} onChange={(e) => setVatRate(e.target.value.replace(/[^\d.]/g, ""))} />
         </Field>
       </div>
