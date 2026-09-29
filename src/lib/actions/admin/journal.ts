@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { slugify } from "@/lib/utils";
 import { audit, staffDb } from "./guard";
@@ -66,7 +66,7 @@ export async function savePost(input: PostInput): Promise<ActionResult<{ id: str
   const { data: clash } = await db.from("posts").select("id").eq("slug", slug).neq("id", id).maybeSingle();
   if (clash) return fail(`Another post already uses the web address "${slug}".`);
 
-  const { data: prev } = isNew ? { data: null } : await db.from("posts").select("status, published_at").eq("id", id).maybeSingle();
+  const { data: prev } = isNew ? { data: null } : await db.from("posts").select("status, published_at, slug").eq("id", id).maybeSingle();
   const row = {
     title: p.title,
     slug,
@@ -82,18 +82,23 @@ export async function savePost(input: PostInput): Promise<ActionResult<{ id: str
   await audit(db, viewer.id, justPublished ? "post.publish" : isNew ? "post.create" : "post.update", "post", id, { name: p.title });
   revalidatePath("/admin/journal");
   revalidatePath("/", "layout");
+  revalidateTag("posts", { expire: 0 });
+  revalidateTag(`post:${slug}`, { expire: 0 });
+  if (prev?.slug && prev.slug !== slug) revalidateTag(`post:${prev.slug}`, { expire: 0 });
   return ok({ id, slug }, justPublished ? "Published. It's live on the journal." : p.status === "published" ? "Saved and live." : "Draft saved.");
 }
 
 export async function deletePost(id: string): Promise<ActionResult> {
   if (!z.uuid().safeParse(id).success) return fail("Invalid post.");
   const { db, viewer } = await staffDb();
-  const { data: post } = await db.from("posts").select("title, cover_path").eq("id", id).maybeSingle();
+  const { data: post } = await db.from("posts").select("title, cover_path, slug").eq("id", id).maybeSingle();
   const { error } = await db.from("posts").delete().eq("id", id);
   if (error) return fail("Couldn't delete the post.");
   if (post?.cover_path && !post.cover_path.startsWith("http")) await db.storage.from("content").remove([post.cover_path]);
   await audit(db, viewer.id, "post.delete", "post", id, { name: post?.title });
   revalidatePath("/admin/journal");
   revalidatePath("/", "layout");
+  revalidateTag("posts", { expire: 0 });
+  if (post?.slug) revalidateTag(`post:${post.slug}`, { expire: 0 });
   return ok(undefined, "Post deleted.");
 }

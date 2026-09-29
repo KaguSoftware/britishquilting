@@ -142,7 +142,9 @@ export function OrderSummary({
           <dt className="font-medium">Total</dt>
           <dd className="font-display text-4xl tabular-nums">{quote ? formatPence(quote.total) : <Placeholder w="w-28" h="h-9" />}</dd>
         </div>
-        <p className="text-right text-xs text-ink-soft">{quote ? `Includes ${formatPence(quote.vat)} VAT at 20%` : "Including VAT"}</p>
+        <p className="text-right text-xs text-ink-soft">
+          {quote ? (quote.vatRate > 0 ? `Includes ${formatPence(quote.vat)} VAT at ${quote.vatRate}%` : "No VAT charged") : "Including VAT"}
+        </p>
       </dl>
 
       {quoteError && <p role="alert" className="mt-4 text-sm text-danger">{quoteError}</p>}

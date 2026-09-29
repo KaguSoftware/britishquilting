@@ -1,20 +1,21 @@
 import "server-only";
 import { penceToDecimal } from "@/lib/checkout/helpers";
+import { env } from "@/lib/env";
 
 /** PayPal Orders v2 over REST, client credentials. No SDK needed. */
 
 export function paypalConfigured() {
-  return Boolean(process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
+  return Boolean(env.NEXT_PUBLIC_PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET);
 }
 
-const base = () => process.env.PAYPAL_API_BASE || "https://api-m.sandbox.paypal.com";
+const base = () => env.PAYPAL_API_BASE || "https://api-m.sandbox.paypal.com";
 
 let cached: { token: string; expires: number } | null = null;
 
 async function accessToken() {
   if (cached && cached.expires > Date.now() + 60_000) return cached.token;
-  const id = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
-  const secret = process.env.PAYPAL_CLIENT_SECRET;
+  const id = env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
+  const secret = env.PAYPAL_CLIENT_SECRET;
   if (!id || !secret) throw new Error("PayPal is not configured");
   const res = await fetch(`${base()}/v1/oauth2/token`, {
     method: "POST",

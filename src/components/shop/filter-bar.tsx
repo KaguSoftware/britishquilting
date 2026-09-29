@@ -124,7 +124,7 @@ export function FilterBar({ facets, count, total }: { facets: Facets; count: num
           className="inline-flex min-h-10 items-center gap-3 text-sm"
         >
           <span className={cn("relative h-6 w-11 rounded-full transition-colors duration-300", inStock ? "bg-aubergine-700" : "bg-stone-300")}>
-            <span className={cn("absolute top-1 size-4 rounded-full bg-cream-50 shadow transition-transform duration-300 ease-(--ease-silk)", inStock ? "translate-x-6" : "translate-x-1")} />
+            <span className={cn("absolute left-1 top-1 size-4 rounded-full bg-cream-50 shadow transition-transform duration-300 ease-(--ease-silk)", inStock ? "translate-x-5" : "translate-x-0")} />
           </span>
           In stock only
         </button>

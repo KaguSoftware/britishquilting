@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { slugify } from "@/lib/utils";
 import { audit, staffDb } from "./guard";
@@ -20,6 +20,7 @@ export type CategoryInput = z.input<typeof schema>;
 function refresh() {
   revalidatePath("/admin/categories");
   revalidatePath("/", "layout");
+  revalidateTag("categories", { expire: 0 });
 }
 
 export async function saveCategory(input: CategoryInput): Promise<ActionResult<{ id: string }>> {

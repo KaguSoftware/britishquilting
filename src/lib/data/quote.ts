@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { quote, type CartLine } from "@/lib/pricing";
-import { findDiscount, getPricedProducts, getShippingRates, getStoreSettings, getViewer } from "@/lib/data/catalog";
+import { findDiscount, getPricedProducts, getShippingRates, getStoreSettings, getVatRate, getViewer } from "@/lib/data/catalog";
 
 const lineSchema = z.object({
   productId: z.uuid(),
@@ -24,11 +24,12 @@ export type QuoteInput = z.input<typeof quoteInputSchema>;
 export async function computeQuote(raw: QuoteInput) {
   const input = quoteInputSchema.parse(raw);
   const viewer = await getViewer();
-  const [products, rates, settings, disc] = await Promise.all([
+  const [products, rates, settings, disc, vatRatePct] = await Promise.all([
     getPricedProducts([...new Set(input.lines.map((l) => l.productId))]),
     getShippingRates(),
     getStoreSettings(),
     findDiscount(input.discountCode, input.email ?? viewer?.email),
+    getVatRate(),
   ]);
   const q = quote({
     lines: input.lines as CartLine[],
@@ -39,6 +40,7 @@ export async function computeQuote(raw: QuoteInput) {
     fulfilment: input.fulfilment,
     discount: disc.discount,
     freeThreshold: settings.free_shipping_threshold_pence,
+    vatRatePct,
   });
   return { q, viewer, settings, discount: disc.discount, discountError: disc.error, input };
 }

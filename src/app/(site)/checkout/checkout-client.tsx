@@ -62,7 +62,7 @@ const appearance: Appearance = {
     borderRadius: "2px",
     fontSizeBase: "15px",
     spacingUnit: "4px",
-    fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+    fontFamily: "'Schibsted Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif",
   },
   rules: {
     ".Input": { border: "1px solid #d9d0bf", boxShadow: "none", padding: "12px 14px" },
@@ -526,6 +526,7 @@ export function CheckoutClient({ viewer, addresses, collection, invoiceTermsDays
         amount: Math.max(quote?.total ?? 0, 30),
         currency: "gbp",
         appearance,
+        fonts: [{ cssSrc: "https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500&display=swap" }],
       }}
     >
       {content}
@@ -717,7 +718,7 @@ function MobileSummary({ total, children }: { total: number | null; children: Re
   );
 }
 
-function CheckoutSkeleton() {
+export function CheckoutSkeleton() {
   return (
     <div className="mx-auto max-w-6xl px-4 pb-24 pt-24 md:px-8 md:pt-32" aria-busy="true" aria-label="Loading checkout">
       <div className="h-12 w-56 animate-pulse bg-cream-200" />

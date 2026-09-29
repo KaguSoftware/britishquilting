@@ -1,6 +1,6 @@
 import { ownerDb } from "@/lib/actions/admin/guard";
-import { loadExpenses, loadOrders, loadRefunds, loadSettings } from "@/lib/data/finance";
-import { computeLedger, estimateFee, londonDay, orderCogs, resolvePeriod, ymdToIso } from "@/lib/finance/calc";
+import { loadChargebacks, loadExpenses, loadOrders, loadRefunds, loadSettings } from "@/lib/data/finance";
+import { computeLedger, londonDay, orderCogs, orderFee, resolvePeriod, ymdToIso } from "@/lib/finance/calc";
 import { expenseCategoryLabel } from "@/lib/finance/categories";
 
 const cell = (v: unknown) => {
@@ -37,10 +37,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       : { data: [] as { id: string; number: number }[] };
     const numbers = new Map((refundOrders ?? []).map((o) => [o.id, o.number]));
     const rows: unknown[][] = [
-      ["Type", "Date", "Order", "Paid by", "Customer type", "Gross", "VAT", "Net of VAT", "Postage", "Discount", "Estimated fee", "Cost of goods", "Items without cost"],
+      ["Type", "Date", "Order", "Paid by", "Customer type", "Gross", "VAT", "Net of VAT", "Postage", "Discount", "Fee", "Cost of goods", "Lines without cost (cost of goods understated)"],
     ];
     for (const o of orders) {
-      const c = orderCogs(o.order_items ?? []);
+      const c = orderCogs(o.order_items ?? [], o.vat_rate ?? 20);
       rows.push([
         "Sale",
         day(o.paid_at),
@@ -52,7 +52,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
         money(o.total_pence - o.vat_included_pence),
         money(o.shipping_pence),
         money(o.discount_pence),
-        money(estimateFee(o.payment_provider, o.total_pence, settings)),
+        money(orderFee(o, settings)),
         money(c.cogs),
         c.missing,
       ]);
@@ -73,13 +73,14 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
   }
 
   if (kind === "vat") {
-    const [settings, orders, refunds, expenses] = await Promise.all([
+    const [settings, orders, refunds, expenses, chargebacks] = await Promise.all([
       loadSettings(db),
       loadOrders(db, period.start, period.end),
       loadRefunds(db, period.start, period.end),
       loadExpenses(db, period.fromDay, period.toDay),
+      loadChargebacks(db, period.start, period.end),
     ]);
-    const l = computeLedger(orders.map((o) => ({ ...o, items: o.order_items ?? [] })), refunds, expenses, settings);
+    const l = computeLedger(orders.map((o) => ({ ...o, items: o.order_items ?? [] })), refunds, expenses, settings, chargebacks);
     const salesVat = orders.reduce((a, o) => a + o.vat_included_pence, 0);
     const refundVat = refunds.reduce((a, r) => a + r.vat_pence, 0);
     const due = l.vat - l.expensesVat;

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getViewer } from "@/lib/data/catalog";
+import { rateLimit } from "@/lib/rate-limit";
 
 export type FormState = { ok: boolean; message: string } | null;
 
@@ -12,6 +13,8 @@ export type FormState = { ok: boolean; message: string } | null;
 const alertSchema = z.object({ productId: z.uuid(), email: z.email().max(254) });
 
 export async function requestStockAlert(_: FormState, form: FormData): Promise<FormState> {
+  if (!(await rateLimit("stock-alert", { limit: 20, windowSeconds: 3600 })))
+    return { ok: false, message: "Too many requests. Please try again in a little while." };
   const parsed = alertSchema.safeParse({ productId: form.get("productId"), email: form.get("email") });
   if (!parsed.success) return { ok: false, message: "Please enter a valid email address." };
   const db = createAdminClient();
@@ -105,6 +108,8 @@ export type TrackResult =
 const GENERIC = "We couldn't find an order matching those details. Please check your order number and the email you used at checkout.";
 
 export async function trackOrder(_: TrackResult, form: FormData): Promise<TrackResult> {
+  if (!(await rateLimit("track-order", { limit: 20, windowSeconds: 600 })))
+    return { ok: false, message: "Too many attempts. Please wait a few minutes and try again." };
   const parsed = trackSchema.safeParse({ number: form.get("number"), email: form.get("email") });
   if (!parsed.success) return { ok: false, message: GENERIC };
   const number = Number(parsed.data.number.replace(/\D/g, ""));
@@ -150,6 +155,8 @@ const contactSchema = z.object({
 });
 
 export async function sendContact(_: FormState, form: FormData): Promise<FormState> {
+  if (!(await rateLimit("contact", { limit: 5, windowSeconds: 3600 })))
+    return { ok: false, message: "Too many messages sent. Please try again in a little while, or call us directly." };
   const parsed = contactSchema.safeParse({
     name: form.get("name"),
     email: form.get("email"),

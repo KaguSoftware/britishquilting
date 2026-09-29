@@ -1,7 +1,11 @@
 import "server-only";
 import { cache } from "react";
-import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { createAdminClient, createClient, createPublicClient } from "@/lib/supabase/server";
 import type { ProductCardData } from "@/components/shop/product-card";
+
+/** How long the public catalog/content reads below may go stale before refetching. */
+const REVALIDATE_SECONDS = 300;
 
 export type Category = { id: string; slug: string; name: string; description: string | null };
 
@@ -62,42 +66,68 @@ export type ListProduct = ProductCardData & {
   created_at: string;
 };
 
-export const getCategories = cache(async (): Promise<Category[]> => {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("categories")
-    .select("id, slug, name, description")
-    .is("parent_id", null)
-    .order("sort_order");
-  return data ?? [];
-});
+/**
+ * These public catalog/content reads never see a signed-in viewer or per-viewer data
+ * (trade pricing, reviews, wishlist state), so they're safe to cache across requests.
+ * They use createPublicClient() (no cookies()/headers()) because unstable_cache forbids
+ * Request-time APIs inside its scope, and are tagged so admin edits (see revalidateTag
+ * calls next to revalidatePath in the admin actions) can invalidate them immediately.
+ */
 
-export const getListProducts = cache(async (): Promise<ListProduct[]> => {
-  const supabase = await createClient();
-  const { data, error } = await supabase.from("products_public").select(LIST_COLUMNS).order("sort_order");
-  if (error) throw error;
-  return (data ?? []) as unknown as ListProduct[];
-});
+export const getCategories = cache(
+  unstable_cache(
+    async (): Promise<Category[]> => {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("categories")
+        .select("id, slug, name, description")
+        .is("parent_id", null)
+        .order("sort_order");
+      return data ?? [];
+    },
+    ["categories"],
+    { tags: ["categories"], revalidate: REVALIDATE_SECONDS },
+  ),
+);
+
+export const getListProducts = cache(
+  unstable_cache(
+    async (): Promise<ListProduct[]> => {
+      const supabase = createPublicClient();
+      const { data, error } = await supabase.from("products_public").select(LIST_COLUMNS).order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as unknown as ListProduct[];
+    },
+    ["list-products"],
+    { tags: ["products"], revalidate: REVALIDATE_SECONDS },
+  ),
+);
 
 const num = (v: unknown) => (v == null ? null : Number(v));
 
 export const getProduct = cache(async (slug: string): Promise<ProductDetail | null> => {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("products_public")
-    .select("*, product_images(storage_path, alt, sort_order)")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (!data) return null;
-  return {
-    ...data,
-    min_length_m: num(data.min_length_m),
-    length_step_m: num(data.length_step_m),
-    max_length_m: num(data.max_length_m),
-    roll_length_m: num(data.roll_length_m),
-    rating_avg: Number(data.rating_avg ?? 0),
-    tags: data.tags ?? [],
-  } as ProductDetail;
+  return unstable_cache(
+    async (): Promise<ProductDetail | null> => {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("products_public")
+        .select("*, product_images(storage_path, alt, sort_order)")
+        .eq("slug", slug)
+        .maybeSingle();
+      if (!data) return null;
+      return {
+        ...data,
+        min_length_m: num(data.min_length_m),
+        length_step_m: num(data.length_step_m),
+        max_length_m: num(data.max_length_m),
+        roll_length_m: num(data.roll_length_m),
+        rating_avg: Number(data.rating_avg ?? 0),
+        tags: data.tags ?? [],
+      } as ProductDetail;
+    },
+    ["product", slug],
+    { tags: ["products", `product:${slug}`], revalidate: REVALIDATE_SECONDS },
+  )();
 });
 
 /** Trade price for an approved trade viewer only. Service role, server-side. */
@@ -130,25 +160,35 @@ export async function getOwnReview(productId: string, userId: string) {
   return data as { id: string; status: "pending" | "approved" | "rejected" } | null;
 }
 
-export async function getPublishedPosts(): Promise<Post[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("posts")
-    .select("id, slug, title, excerpt, cover_path, body_html, published_at")
-    .eq("status", "published")
-    .order("published_at", { ascending: false, nullsFirst: false });
-  return data ?? [];
-}
+export const getPublishedPosts = unstable_cache(
+  async (): Promise<Post[]> => {
+    const supabase = createPublicClient();
+    const { data } = await supabase
+      .from("posts")
+      .select("id, slug, title, excerpt, cover_path, body_html, published_at")
+      .eq("status", "published")
+      .order("published_at", { ascending: false, nullsFirst: false });
+    return data ?? [];
+  },
+  ["published-posts"],
+  { tags: ["posts"], revalidate: REVALIDATE_SECONDS },
+);
 
 export const getPost = cache(async (slug: string): Promise<Post | null> => {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("posts")
-    .select("id, slug, title, excerpt, cover_path, body_html, published_at")
-    .eq("status", "published")
-    .eq("slug", slug)
-    .maybeSingle();
-  return data;
+  return unstable_cache(
+    async (): Promise<Post | null> => {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("posts")
+        .select("id, slug, title, excerpt, cover_path, body_html, published_at")
+        .eq("status", "published")
+        .eq("slug", slug)
+        .maybeSingle();
+      return data;
+    },
+    ["post", slug],
+    { tags: ["posts", `post:${slug}`], revalidate: REVALIDATE_SECONDS },
+  )();
 });
 
 /* ───────────────────────── listing filters */

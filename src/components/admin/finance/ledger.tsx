@@ -18,15 +18,19 @@ type Row = {
 const ROWS: Row[] = [
   { key: "gross", label: "Gross sales", note: "Everything customers paid, VAT, postage and all" },
   { key: "refunds", label: "Refunds", note: "Money given back in this period", minus: true, inverse: true },
+  { key: "chargebacks", label: "Chargebacks", note: "Payments taken back by the customer's bank", minus: true, inverse: true },
   { key: "net", label: "Net sales", rule: true },
   { key: "vat", label: "VAT on sales", note: "What you owe HMRC, after refunds", minus: true, inverse: true },
   { key: "revenueExVat", label: "Revenue, before VAT", rule: true },
   { key: "shipping", label: "of which postage charged", detail: true },
   { key: "discounts", label: "Discounts given", detail: true, inverse: true },
-  { key: "fees", label: "Payment fees (estimate)", note: "Card and PayPal charges, from your fee rates below", minus: true, inverse: true },
+  { key: "fees", label: "Payment fees", note: "Card and PayPal charges: the rate each order was actually paid at, or an estimate for older orders", minus: true, inverse: true },
+  { key: "disputeFees", label: "Dispute fees", note: "Charged by the payment provider when a customer disputes a payment", minus: true, inverse: true },
   { key: "cogs", label: "Cost of fabric sold", minus: true, inverse: true },
   { key: "expensesExVat", label: "Expenses, before VAT", note: "From your expenses book", minus: true, inverse: true },
 ];
+
+const showRow = (key: keyof Ledger, ledger: Ledger, previous: Ledger) => (key === "chargebacks" || key === "disputeFees" ? ledger[key] !== 0 || previous[key] !== 0 : true);
 
 function Delta({ now, before, inverse }: { now: number; before: number; inverse?: boolean }) {
   const c = change(now, before);
@@ -61,7 +65,7 @@ export function LedgerTable({ ledger, previous, previousLabel }: { ledger: Ledge
       </div>
 
       <ol>
-        {ROWS.map((r) => (
+        {ROWS.filter((r) => showRow(r.key, ledger, previous)).map((r) => (
           <li
             key={r.key}
             className={cn(
@@ -74,8 +78,8 @@ export function LedgerTable({ ledger, previous, previousLabel }: { ledger: Ledge
               <p className={cn(r.detail ? "text-sm text-ink-soft" : "text-[0.95rem] text-ink", r.rule && "font-medium")}>{r.label}</p>
               {r.note && <p className="text-xs text-stone-500">{r.note}</p>}
               {r.key === "cogs" && ledger.costMissing > 0 && (
-                <p className="text-xs text-gold-600">
-                  Cost missing for {ledger.costMissing} {ledger.costMissing === 1 ? "item" : "items"}.{" "}
+                <p className="text-xs text-danger">
+                  {formatPence(ledger.costMissingSales)} of sales ({ledger.costMissing} {ledger.costMissing === 1 ? "line" : "lines"}) had no cost price, so they count as costing nothing. Profit below is overstated.{" "}
                   <Link href="/admin/products" className="underline underline-offset-2">
                     Add cost prices
                   </Link>
@@ -101,7 +105,7 @@ export function LedgerTable({ ledger, previous, previousLabel }: { ledger: Ledge
         ))}
         <li className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 border-t-2 border-aubergine-900 bg-cream-100/60 px-5 py-5 md:grid-cols-[1fr_9rem_9rem_6rem]">
           <div>
-            <p className="font-display text-[1.6rem] leading-none text-aubergine-900">Profit</p>
+            <p className="font-display text-[1.6rem] leading-none text-aubergine-900">{ledger.costMissing > 0 ? "Profit, at most" : "Profit"}</p>
             <p className="mt-1 text-xs text-stone-500">{margin == null ? "Before tax on profits" : `${margin}% of revenue, before tax on profits`}</p>
           </div>
           <p className={cn("text-right font-display text-[2.1rem] leading-none tabular-nums md:text-[1.7rem]", ledger.profit < 0 ? "text-danger" : "text-aubergine-900")}>

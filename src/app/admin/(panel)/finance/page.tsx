@@ -9,7 +9,7 @@ import { LedgerTable } from "@/components/admin/finance/ledger";
 import { RevenueProfitChart, SplitBar, BarList, TopProducts } from "@/components/admin/finance/charts";
 import { UnpaidInvoices } from "@/components/admin/finance/unpaid-invoices";
 import { ExpensesBook } from "@/components/admin/finance/expenses-book";
-import { FeeSettingsForm } from "@/components/admin/finance/fee-settings";
+import { FeeSettingsForm, VatRateForm } from "@/components/admin/finance/fee-settings";
 
 export const metadata = { title: "Money" };
 
@@ -116,6 +116,9 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
         </Card>
         <Card title={<><span className="mr-2 text-gold-600">7.</span>Fee rates</>} description="What Stripe and PayPal charge you">
           <FeeSettingsForm settings={data.settings} />
+          <div className="mt-6 border-t border-ink/10 pt-6">
+            <VatRateForm vatRate={data.settings.vat_rate} />
+          </div>
         </Card>
       </section>
     </div>

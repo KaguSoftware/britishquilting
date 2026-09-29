@@ -121,3 +121,17 @@ export async function saveFinanceSettings(input: z.input<typeof settingsSchema>)
   refresh();
   return ok(undefined, "Fee rates saved.");
 }
+
+const vatRateSchema = z.object({ vat_rate: z.number().min(0).max(99) });
+
+/** Kept separate from fee saving so the VAT rate, which affects every future order, can't be changed by accident. */
+export async function saveVatRate(input: z.input<typeof vatRateSchema>): Promise<ActionResult> {
+  const parsed = vatRateSchema.safeParse(input);
+  if (!parsed.success) return fail("Please enter a valid VAT rate.");
+  const { db, viewer } = await ownerDb();
+  const { error } = await db.from("finance_settings").upsert({ id: true, vat_rate: parsed.data.vat_rate, updated_at: new Date().toISOString() });
+  if (error) return fail("Couldn't save the VAT rate.");
+  await audit(db, viewer.id, "finance.vat_rate", "finance_settings", null, parsed.data);
+  refresh();
+  return ok(undefined, "VAT rate saved. This applies to orders placed from now on; past orders keep the rate they were placed at.");
+}

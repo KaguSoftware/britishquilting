@@ -1,10 +1,40 @@
 "use client";
 
 import { useState } from "react";
-import { saveFinanceSettings } from "@/lib/actions/admin/finance";
+import { saveFinanceSettings, saveVatRate } from "@/lib/actions/admin/finance";
 import type { FeeSettings } from "@/lib/finance/calc";
 import { Button, Field, MoneyInput, UnitInput } from "../ui";
-import { useAction } from "../controls";
+import { useAction, useConfirm } from "../controls";
+
+export function VatRateForm({ vatRate }: { vatRate: number }) {
+  const { run, pending } = useAction();
+  const confirm = useConfirm();
+  const [value, setValue] = useState(String(vatRate));
+  const save = async () => {
+    const n = Number(value);
+    if (
+      await confirm({
+        title: "Change the VAT rate?",
+        description: "Applies to orders placed from now on. Past orders keep the rate they were placed at.",
+        confirmLabel: "Yes, change it",
+      })
+    )
+      run(() => saveVatRate({ vat_rate: n }));
+  };
+  return (
+    <div>
+      <Field label="VAT rate" htmlFor="vr">
+        <UnitInput unit="%" id="vr" value={value} onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ""))} />
+      </Field>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-stone-500">Set to 0 if you aren&apos;t VAT registered.</p>
+        <Button variant="secondary" onClick={save} disabled={pending || !value || Number.isNaN(Number(value))}>
+          {pending ? "Saving..." : "Save VAT rate"}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function FeeSettingsForm({ settings }: { settings: FeeSettings }) {
   const { run, pending } = useAction();
