@@ -12,7 +12,7 @@ import { LedgerTable } from "./ledger";
 import { RevenueProfitChart, SplitBar, BarList, TopProducts } from "./charts";
 import { UnpaidInvoices } from "./unpaid-invoices";
 import { ExpensesBook } from "./expenses-book";
-import { FeeSettingsForm, VatRateForm } from "./fee-settings";
+import { FeeSettingsForm } from "./fee-settings";
 
 type State = { data: FinanceData; period: Period; prev: Period };
 
@@ -159,11 +159,8 @@ export function FinanceDashboard({ initial, initialKey }: { initial: State; init
               </a>
             </div>
           </Card>
-          <Card title={<><span className="mr-2 text-gold-600">7.</span>Fee rates</>} description="What Stripe and PayPal charge you">
+          <Card title={<><span className="mr-2 text-gold-600">7.</span>Fee rates and VAT</>} description="What Stripe and PayPal charge you, and the VAT rate on new orders">
             <FeeSettingsForm settings={data.settings} />
-            <div className="mt-6 border-t border-ink/10 pt-6">
-              <VatRateForm vatRate={data.settings.vat_rate} />
-            </div>
           </Card>
         </section>
       </div>
