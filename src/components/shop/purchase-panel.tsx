@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useId, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 import {IconMail, IconCheck, IconMinus, IconPlus, IconScissors, IconBasket} from "@/components/icons";
@@ -51,6 +51,16 @@ export function PurchasePanel({ p }: { p: PurchaseProduct }) {
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
   const lengthId = useId();
+  const addButtonRef = useRef<HTMLDivElement>(null);
+  const [addButtonVisible, setAddButtonVisible] = useState(true);
+
+  useEffect(() => {
+    const el = addButtonRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setAddButtonVisible(e.isIntersecting), { rootMargin: "0px 0px -20% 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   const total = isMetre ? Math.round(unit * length * qty) : unit * qty;
   const swatchInCart = items.some((i) => i.productId === p.id && i.isSwatch);
@@ -225,7 +235,7 @@ export function PurchasePanel({ p }: { p: PurchaseProduct }) {
             </p>
           )}
 
-          <div className="grid gap-3">
+          <div ref={addButtonRef} className="grid gap-3">
             <Magnet padding={40} magnetStrength={30} style={{ position: "relative", display: "block" }} innerClassName="grid">
               <button type="button" onClick={addToBasket} className={cn(btnPrimary, "min-h-14 text-base")}>
               <AnimatePresence mode="wait" initial={false}>
@@ -242,6 +252,30 @@ export function PurchasePanel({ p }: { p: PurchaseProduct }) {
             </button>
             </Magnet>
             {p.swatchEnabled && <SwatchButton onClick={addSwatch} inCart={hydrated && swatchInCart} full={hydrated && swatchFull} price={p.swatchPricePence} />}
+          </div>
+
+          <div
+            aria-hidden={addButtonVisible}
+            className={cn(
+              "fixed inset-x-0 bottom-0 z-40 border-t border-stone-300 bg-cream-50 px-4 pt-3 shadow-lift transition-transform duration-300 ease-(--ease-silk) md:hidden",
+              "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+              addButtonVisible && "translate-y-full",
+            )}
+          >
+            <div className="flex items-center gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs text-ink-soft">{p.name}</p>
+                <p className="font-display text-xl leading-tight tabular-nums">{formatPence(total)}</p>
+              </div>
+              <button
+                type="button"
+                tabIndex={addButtonVisible ? -1 : 0}
+                onClick={addToBasket}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-sm bg-aubergine-800 px-5 text-sm font-medium text-cream-50 active:bg-aubergine-700"
+              >
+                <IconBasket className="size-4" strokeWidth={1.5} /> Add to basket
+              </button>
+            </div>
           </div>
         </div>
       ) : (

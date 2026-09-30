@@ -2,14 +2,16 @@ import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/server";
 import { finaliseOrder } from "@/lib/checkout/finalise";
-import { sendRefunded } from "@/lib/email";
+import { sendDisputeAlert, sendRefunded } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
  * Stripe webhook. Configure in the Stripe dashboard (or `stripe listen`) for:
- * payment_intent.succeeded, payment_intent.payment_failed, charge.refunded.
+ * payment_intent.succeeded, payment_intent.payment_failed, charge.refunded,
+ * charge.dispute.created, charge.dispute.updated, charge.dispute.closed,
+ * charge.dispute.funds_withdrawn, charge.dispute.funds_reinstated.
  * Every handler is idempotent because Stripe retries.
  */
 export async function POST(req: Request) {
@@ -38,6 +40,13 @@ export async function POST(req: Request) {
         break;
       case "charge.refunded":
         await onRefunded(event.data.object);
+        break;
+      case "charge.dispute.created":
+      case "charge.dispute.updated":
+      case "charge.dispute.closed":
+      case "charge.dispute.funds_withdrawn":
+      case "charge.dispute.funds_reinstated":
+        await onDispute(event.data.object);
         break;
     }
   } catch (e) {
@@ -132,5 +141,58 @@ async function onRefunded(charge: Stripe.Charge) {
       continue;
     }
     if (data?.inserted) await sendRefunded(order.id, r.amount);
+  }
+}
+
+/**
+ * A payment has been disputed by the cardholder's bank. record_dispute() is idempotent on the
+ * dispute's own id and on each balance transaction's id, so replayed events add nothing twice,
+ * and it recalculates orders.chargeback_pence from the actual money movements rather than a
+ * single point-in-time amount. Staff are only emailed the first time the status changes.
+ */
+async function onDispute(dispute: Stripe.Dispute) {
+  const piId = typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id;
+  if (!piId) return;
+  const db = createAdminClient();
+  const { data: order } = await db.from("orders").select("id").eq("payment_ref", piId).maybeSingle();
+  if (!order) {
+    console.warn("dispute for unknown order", dispute.id);
+    return;
+  }
+  if (dispute.currency !== "gbp") {
+    await db.from("order_events").insert({
+      order_id: order.id,
+      kind: "note",
+      message: `Non-GBP dispute received (${dispute.currency}), reviewed manually.`,
+      data: { dispute_id: dispute.id },
+      visible_to_customer: false,
+    });
+    return;
+  }
+
+  const transactions = (dispute.balance_transactions ?? []).map((t) => ({ id: t.id, amount: t.amount, fee: t.fee }));
+  const { data, error } = await db.rpc("record_dispute", {
+    p_order_id: order.id,
+    p_provider_ref: dispute.id,
+    p_charge_ref: typeof dispute.charge === "string" ? dispute.charge : (dispute.charge?.id ?? null),
+    p_amount: dispute.amount,
+    p_reason: dispute.reason,
+    p_status: dispute.status,
+    p_evidence_due_by: dispute.evidence_details?.due_by ? new Date(dispute.evidence_details.due_by * 1000).toISOString() : null,
+    p_opened_at: new Date(dispute.created * 1000).toISOString(),
+    p_transactions: transactions,
+  });
+  if (error) {
+    console.error("record_dispute", error);
+    return;
+  }
+  if (data?.status_changed) {
+    await sendDisputeAlert(order.id, {
+      id: dispute.id,
+      amount: dispute.amount,
+      reason: dispute.reason,
+      status: dispute.status,
+      evidenceDueBy: dispute.evidence_details?.due_by ? new Date(dispute.evidence_details.due_by * 1000).toISOString() : null,
+    }).catch((e) => console.error("dispute alert email", e));
   }
 }

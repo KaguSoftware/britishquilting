@@ -1,11 +1,12 @@
 import "server-only";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 /**
  * Refreshes storefront pages that show stock after it changes (payment, reservation,
  * restock). revalidatePath throws when called during a page render (the checkout
  * success page finalises orders while rendering), so failures are swallowed: the
- * pages then catch up on their normal revalidation.
+ * pages then catch up on their normal revalidation. Also expires the cached product
+ * reads behind those pages (src/lib/data/shop.ts) for the same reason.
  */
 export function revalidateStorefront() {
   try {
@@ -13,6 +14,7 @@ export function revalidateStorefront() {
     revalidatePath("/shop", "layout");
     revalidatePath("/product/[slug]", "page");
     revalidatePath("/samples");
+    revalidateTag("products", { expire: 0 });
   } catch {
     /* called during render: nothing to do */
   }

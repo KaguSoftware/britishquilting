@@ -57,7 +57,6 @@ export type LineError =
   | "bad_quantity";
 
 export const MAX_SWATCHES = 6;
-export const VAT_RATE = 0.2;
 
 const EPS = 1e-6;
 const roundPence = (n: number) => Math.round(n + EPS);
@@ -136,8 +135,10 @@ export function shippingFor(opts: {
   return rate.price_pence;
 }
 
-export function vatIncluded(total: number) {
-  return roundPence(total - total / (1 + VAT_RATE));
+/** VAT inside a VAT-inclusive amount, at the rate in force for this order. */
+export function vatIncluded(total: number, vatRatePct: number) {
+  if (vatRatePct <= 0) return 0;
+  return roundPence(total - total / (1 + vatRatePct / 100));
 }
 
 export type Quote = {
@@ -147,6 +148,8 @@ export type Quote = {
   shipping: number;
   total: number;
   vat: number;
+  /** The VAT percentage this quote was priced at, so it can be snapshotted on the order. */
+  vatRate: number;
   weightG: number;
   rates: ShippingRate[];
   selectedRate: ShippingRate | null;
@@ -162,6 +165,8 @@ export function quote(input: {
   fulfilment: "delivery" | "collection";
   discount: Discount | null;
   freeThreshold: number | null;
+  /** Current admin-configured VAT rate (finance_settings.vat_rate), not hardcoded. */
+  vatRatePct: number;
 }): Quote {
   const byId = new Map(input.products.map((p) => [p.id, p]));
 
@@ -205,7 +210,8 @@ export function quote(input: {
     discount,
     shipping,
     total,
-    vat: vatIncluded(total),
+    vat: vatIncluded(total, input.vatRatePct),
+    vatRate: input.vatRatePct,
     weightG,
     rates,
     selectedRate,

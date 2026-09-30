@@ -20,6 +20,8 @@ type O = {
   paid_at: string | null;
   total_pence: number;
   refunded_pence: number;
+  chargeback_pence: number;
+  disputed: boolean;
   email: string;
 };
 
@@ -52,8 +54,8 @@ export function OrderActions({ order, items }: { order: O; items: ActionItem[] }
   // Unpaid invoices have taken no money: cancel them, or mark them paid before refunding (keeps the finance ledger honest).
   const paid = Boolean(order.paid_at);
   const invoiceUnpaid = order.payment_provider === "invoice" && !order.paid_at && !["cancelled", "refunded"].includes(s);
-  const left = order.total_pence - order.refunded_pence;
-  const showRefund = canRefund(s, paid) && left > 0;
+  const left = order.total_pence - order.refunded_pence - order.chargeback_pence;
+  const showRefund = canRefund(s, paid) && left > 0 && !order.disputed;
   const showCancel = canCancel(s);
   // Undo: only to the immediately previous status, and only where it isn't already a forward move.
   const undoTo = order.previous && canTransition(s, order.previous, order.previous) && !canTransition(s, order.previous) ? order.previous : null;
@@ -107,39 +109,46 @@ export function OrderActions({ order, items }: { order: O; items: ActionItem[] }
   const nothing = !primary && !invoiceUnpaid && !showCancel && !showRefund && !undoTo;
 
   return (
-    <div className="flex flex-col gap-3 rounded-[3px] border border-ink/12 bg-cream-50 p-4 sm:flex-row sm:flex-wrap sm:items-center">
-      {/* On phones the next step sits in a bar above the tab bar, always in reach of a thumb */}
-      <div
-        className={
-          (primary || invoiceUnpaid
-            ? "fixed inset-x-0 bottom-[calc(3.6rem+env(safe-area-inset-bottom))] z-30 border-t border-ink/15 bg-cream-50 px-4 py-3 lg:static lg:border-0 lg:bg-transparent lg:p-0 "
-            : "") + "flex flex-col gap-2 sm:flex-row [&>button]:w-full sm:[&>button]:w-auto"
-        }
-      >
-        {primary}
-        {invoiceUnpaid && (
-          <Button size="lg" variant={primary ? "secondary" : "primary"} disabled={pending} onClick={() => setInvoice(true)}>
-            <IconCard className="size-5" /> Mark invoice as paid
-          </Button>
-        )}
-      </div>
-      {!primary && !invoiceUnpaid && <p className="text-sm text-ink-soft">{nothing ? "Nothing more to do on this order." : "No next step to take."}</p>}
-      <div className="flex flex-wrap gap-2 sm:ml-auto">
-        {undoTo && (
-          <Button variant="ghost" size="sm" disabled={pending} onClick={() => status(undoTo, `Moved back to ${ORDER_STATUS[undoTo].label.toLowerCase()}`)}>
-            Move back to {ORDER_STATUS[undoTo].label.toLowerCase()}
-          </Button>
-        )}
-        {showCancel && (
-          <Button variant="ghost" size="sm" disabled={pending} onClick={() => setCancel(true)}>
-            Cancel order
-          </Button>
-        )}
-        {showRefund && (
-          <Button variant="danger" size="sm" disabled={pending} onClick={() => setRefund(true)}>
-            {order.refunded_pence > 0 ? "Refund more" : "Refund"}
-          </Button>
-        )}
+    <div className="space-y-3">
+      {order.disputed && (
+        <p className="border-l-2 border-danger bg-danger/10 px-4 py-3 text-sm text-ink">
+          The customer&apos;s bank has disputed this payment. Refunding is disabled until it&apos;s resolved. If the order hasn&apos;t shipped, consider holding it.
+        </p>
+      )}
+      <div className="flex flex-col gap-3 rounded-[3px] border border-ink/12 bg-cream-50 p-4 sm:flex-row sm:flex-wrap sm:items-center">
+        {/* On phones the next step sits in a bar above the tab bar, always in reach of a thumb */}
+        <div
+          className={
+            (primary || invoiceUnpaid
+              ? "fixed inset-x-0 bottom-[calc(3.6rem+env(safe-area-inset-bottom))] z-30 border-t border-ink/15 bg-cream-50 px-4 py-3 lg:static lg:border-0 lg:bg-transparent lg:p-0 "
+              : "") + "flex flex-col gap-2 sm:flex-row [&>button]:w-full sm:[&>button]:w-auto"
+          }
+        >
+          {primary}
+          {invoiceUnpaid && (
+            <Button size="lg" variant={primary ? "secondary" : "primary"} disabled={pending} onClick={() => setInvoice(true)}>
+              <IconCard className="size-5" /> Mark invoice as paid
+            </Button>
+          )}
+        </div>
+        {!primary && !invoiceUnpaid && <p className="text-sm text-ink-soft">{nothing ? "Nothing more to do on this order." : "No next step to take."}</p>}
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
+          {undoTo && (
+            <Button variant="ghost" size="sm" disabled={pending} onClick={() => status(undoTo, `Moved back to ${ORDER_STATUS[undoTo].label.toLowerCase()}`)}>
+              Move back to {ORDER_STATUS[undoTo].label.toLowerCase()}
+            </Button>
+          )}
+          {showCancel && (
+            <Button variant="ghost" size="sm" disabled={pending} onClick={() => setCancel(true)}>
+              Cancel order
+            </Button>
+          )}
+          {showRefund && (
+            <Button variant="danger" size="sm" disabled={pending} onClick={() => setRefund(true)}>
+              {order.refunded_pence > 0 ? "Refund more" : "Refund"}
+            </Button>
+          )}
+        </div>
       </div>
 
       <TrackingModal open={tracking} onClose={() => setTracking(false)} order={order} />
@@ -277,7 +286,7 @@ const fmtQty = (i: ActionItem, q: number) =>
 function RefundSheet({ onClose, order, items }: { onClose: () => void; order: O; items: ActionItem[] }) {
   const { run, pending } = useAction();
   const lines = useMemo(() => items.filter((i) => !i.is_swatch && i.product_id), [items]);
-  const left = order.total_pence - order.refunded_pence;
+  const left = order.total_pence - order.refunded_pence - order.chargeback_pence;
   const [mode, setMode] = useState<"full" | "partial">(order.refunded_pence > 0 ? "partial" : "full");
   const [picks, setPicks] = useState<Record<string, Pick>>(() =>
     Object.fromEntries(lines.map((l) => [l.id, { qty: leftQty(l), restock: restockByDefault(l.sale_mode) }])),

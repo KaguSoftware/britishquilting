@@ -215,7 +215,7 @@ export async function addTimelineNote(orderId: string, message: string): Promise
 
 /* ───────────────────────── Refunds */
 
-async function refundStripe(ref: string, amount: number, orderId: string) {
+async function refundStripe(ref: string, amount: number, orderId: string, idempotencyKey: string) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
   let paymentIntent: string | undefined;
   let charge: string | undefined;
@@ -226,7 +226,8 @@ async function refundStripe(ref: string, amount: number, orderId: string) {
     paymentIntent = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
   }
   if (!paymentIntent && !charge) throw new Error("No Stripe payment reference on this order");
-  const refund = await stripe.refunds.create({ payment_intent: paymentIntent, charge, amount, metadata: { order_id: orderId, source: "admin" } });
+  // The idempotency key means a retried request (a timeout, a double click) can never create a second refund.
+  const refund = await stripe.refunds.create({ payment_intent: paymentIntent, charge, amount, metadata: { order_id: orderId, source: "admin" } }, { idempotencyKey });
   return refund.id;
 }
 
@@ -243,7 +244,7 @@ async function paypalToken() {
 }
 
 /** Partial or full: PayPal refunds exactly the amount given against the capture. */
-async function refundPaypal(ref: string, amount: number) {
+async function refundPaypal(ref: string, amount: number, requestId: string) {
   const { base, token } = await paypalToken();
   let captureId = ref;
   // The reference may be the PayPal order id: look up its capture.
@@ -252,9 +253,10 @@ async function refundPaypal(ref: string, amount: number) {
     const o = (await orderRes.json()) as { purchase_units?: { payments?: { captures?: { id: string }[] } }[] };
     captureId = o.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? ref;
   }
+  // PayPal-Request-Id: a retried request (a timeout, a double click) replays the same refund instead of creating a second one.
   const res = await fetch(`${base}/v2/payments/captures/${encodeURIComponent(captureId)}/refund`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "PayPal-Request-Id": requestId },
     body: JSON.stringify({ amount: { value: (amount / 100).toFixed(2), currency_code: "GBP" } }),
   });
   if (!res.ok) throw new Error(`PayPal refund failed (${res.status})`);
@@ -287,8 +289,10 @@ export async function refundOrder(input: z.input<typeof refundSchema>): Promise<
   if (!order) return fail("We couldn't find that order.");
   const takenMoney = Boolean(order.paid_at);
   if (!takenMoney || !canTransition(order.status, "refunded")) return fail("This order can't be refunded.");
+  const { data: disputed } = await db.rpc("order_disputed", { p_order_id: orderId });
+  if (disputed) return fail("This order has an open payment dispute. Resolve the dispute with your payment provider before refunding.");
 
-  const left = order.total_pence - (order.refunded_pence ?? 0);
+  const left = order.total_pence - (order.refunded_pence ?? 0) - (order.chargeback_pence ?? 0);
   const amount = full ? left : parsed.data.amount;
   if (!amount || amount <= 0) return fail("Please enter an amount to refund.");
   if (amount > left) return fail(`You can refund at most ${(left / 100).toFixed(2)} GBP on this order.`);
@@ -303,15 +307,18 @@ export async function refundOrder(input: z.input<typeof refundSchema>): Promise<
     }
   }
 
+  // Stable per attempt, not per retry: a request that times out and is retried by the browser
+  // reuses the same key, so the provider replays the original refund instead of sending a second one.
+  const idempotencyKey = `bq-refund-${orderId}-${amount}-${items?.map((i) => i.order_item_id).join(",") ?? "full"}`;
   let refundRef: string | null = null;
   let method: "manual" | "stripe" | "paypal" = "manual";
   if (!manual && order.paid_at && order.payment_ref) {
     try {
       if (order.payment_provider === "stripe" && process.env.STRIPE_SECRET_KEY) {
-        refundRef = await refundStripe(order.payment_ref, amount, orderId);
+        refundRef = await refundStripe(order.payment_ref, amount, orderId, idempotencyKey);
         method = "stripe";
       } else if (order.payment_provider === "paypal" && process.env.PAYPAL_CLIENT_SECRET && process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID) {
-        refundRef = await refundPaypal(order.payment_ref, amount);
+        refundRef = await refundPaypal(order.payment_ref, amount, idempotencyKey);
         method = "paypal";
       }
     } catch (e) {
@@ -322,20 +329,37 @@ export async function refundOrder(input: z.input<typeof refundSchema>): Promise<
     }
   }
 
-  const { data: result, error } = await db.rpc("record_refund", {
-    p_order_id: orderId,
-    p_amount: amount,
-    p_items: items?.length ? items : null,
-    p_restock: restock,
-    p_provider_ref: refundRef,
-    p_actor: viewer.id,
-    p_reason: reason || null,
-    p_method: method,
-  });
+  // The money may already have left the account (refundRef is set): retry recording it a few times
+  // before giving up, since a transient DB error here must never look like nothing happened.
+  let result: { refunded_pence?: number } | null = null;
+  let error: { message?: string } | null = null;
+  for (let attempt = 0; attempt < (refundRef ? 3 : 1); attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 300 * 2 ** (attempt - 1)));
+    ({ data: result, error } = await db.rpc("record_refund", {
+      p_order_id: orderId,
+      p_amount: amount,
+      p_items: items?.length ? items : null,
+      p_restock: restock,
+      p_provider_ref: refundRef,
+      p_actor: viewer.id,
+      p_reason: reason || null,
+      p_method: method,
+    }));
+    if (!error || error.message?.includes("refund_exceeds_total") || error.message?.includes("payment_disputed")) break;
+  }
   if (error) {
     console.error("record_refund", error);
-    if (refundRef) return fail(`The money was sent back (${refundRef}), but we couldn't record it here. Please add a note to the order.`);
-    return fail(error.message?.includes("refund_exceeds_total") ? "That's more than is left to refund." : "Couldn't record the refund. Please try again.");
+    if (refundRef) {
+      // Leave a trail on the order even though the toast is the only other thing staff will see right now.
+      await db.from("order_events").insert({
+        order_id: orderId,
+        kind: "note",
+        message: `${method === "stripe" ? "Stripe" : "PayPal"} refunded ${(amount / 100).toFixed(2)} GBP (${refundRef}), but it couldn't be recorded here: ${error.message ?? "unknown error"}. Check the ledger and add a note.`,
+        visible_to_customer: false,
+      });
+      return fail(`The money was sent back (${refundRef}), but we couldn't record it here. Please add a note to the order.`);
+    }
+    return fail(error.message?.includes("payment_disputed") ? "This order has an open payment dispute." : error.message?.includes("refund_exceeds_total") ? "That's more than is left to refund." : "Couldn't record the refund. Please try again.");
   }
 
   const wholeOrder = amount === order.total_pence;

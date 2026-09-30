@@ -6,7 +6,8 @@ import { IconPencil, IconPlus, IconTag, IconTrash } from "@/components/icons";
 import { deleteDiscount, restoreDiscount, saveDiscount, setDiscountActive } from "@/lib/actions/admin/marketing";
 import { cn } from "@/lib/utils";
 import { discountState, discountSummary, penceToPounds, poundsToPence, type DiscountRow } from "./format";
-import { CopyButton, Modal, Segmented, Switch, useAction, useConfirm } from "./controls";
+import { Modal, Segmented, Switch, useAction, useConfirm } from "./controls";
+import { CopyButton } from "@/components/ui/copy-button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge, Button, EmptyState, Field, Input, MoneyInput, UnitInput } from "./ui";
 

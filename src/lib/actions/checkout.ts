@@ -145,16 +145,25 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
     const db = createAdminClient();
 
     // Idempotency: the same basket in the same browser session reuses its open order.
-    type OpenOrder = { id: string; number: number; access_token: string; total_pence: number; payment_provider: string | null; payment_ref: string | null };
+    type OpenOrder = { id: string; number: number; access_token: string; total_pence: number; vat_included_pence: number; payment_provider: string | null; payment_ref: string | null };
     let order: OpenOrder | null = null;
     const attempt = await readAttempt();
     if (attempt && attempt.hash === hash && input.provider !== "invoice") {
       const { data } = await db
         .from("orders")
-        .select("id, number, access_token, total_pence, payment_provider, payment_ref, status, email, user_id")
+        .select("id, number, access_token, total_pence, vat_included_pence, payment_provider, payment_ref, status, email, user_id")
         .eq("id", attempt.orderId)
         .maybeSingle();
-      if (data && data.status === "awaiting_payment" && data.total_pence === q.total && data.email === email && (data.user_id ?? null) === (viewer?.id ?? null))
+      // vat_included_pence must still match too: the VAT rate can change between quoting and payment,
+      // and reusing a stale order would keep the old rate frozen on a new-looking total.
+      if (
+        data &&
+        data.status === "awaiting_payment" &&
+        data.total_pence === q.total &&
+        data.vat_included_pence === q.vat &&
+        data.email === email &&
+        (data.user_id ?? null) === (viewer?.id ?? null)
+      )
         order = data;
     }
 
@@ -181,12 +190,13 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
           shipping_pence: q.shipping,
           total_pence: q.total,
           vat_included_pence: q.vat,
+          vat_rate: q.vatRate,
           discount_code: discount?.code ?? null,
           is_trade: Boolean(viewer?.isTrade),
           invoice_due_at: isInvoice ? addDays(new Date(), settings.invoice_terms_days ?? 30).toISOString() : null,
           customer_note: input.note || null,
         })
-        .select("id, number, access_token, total_pence, payment_provider, payment_ref")
+        .select("id, number, access_token, total_pence, vat_included_pence, payment_provider, payment_ref")
         .single();
       if (error || !created) throw error ?? new Error("order insert failed");
 

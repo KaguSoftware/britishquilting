@@ -60,6 +60,14 @@ export async function getShippingRates(): Promise<ShippingRate[]> {
   return data ?? [];
 }
 
+/** The admin-configured VAT rate, live at the moment of quoting. Defaults to 20 if the settings row is missing. */
+export async function getVatRate(): Promise<number> {
+  const db = createAdminClient();
+  const { data, error } = await db.from("finance_settings").select("vat_rate").maybeSingle();
+  if (error) throw error;
+  return data ? Number(data.vat_rate) : 20;
+}
+
 export async function getStoreSettings() {
   const db = createAdminClient();
   const { data } = await db.from("store_settings").select("*").eq("id", 1).single();

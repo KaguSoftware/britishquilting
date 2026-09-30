@@ -3,12 +3,15 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendWelcomeNewsletter } from "@/lib/email";
+import { rateLimit } from "@/lib/rate-limit";
 
 export type NewsletterState = { ok: boolean; message: string } | null;
 
 const schema = z.object({ email: z.email().max(254), source: z.string().max(40).optional() });
 
 export async function subscribe(_: NewsletterState, form: FormData): Promise<NewsletterState> {
+  if (!(await rateLimit("newsletter", { limit: 5, windowSeconds: 3600 })))
+    return { ok: false, message: "Too many attempts. Please try again in a little while." };
   const parsed = schema.safeParse({ email: form.get("email"), source: form.get("source") ?? "footer" });
   if (!parsed.success) return { ok: false, message: "Please enter a valid email address." };
   const db = createAdminClient();

@@ -25,6 +25,7 @@ export async function quoteCart(raw: QuoteInput) {
       shipping: q.shipping,
       total: q.total,
       vat: q.vat,
+      vatRate: q.vatRate,
       rates: q.rates.map((r, i) => ({
         id: r.id,
         name: r.name,

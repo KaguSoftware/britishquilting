@@ -16,7 +16,7 @@ const rates: ShippingRate[] = [
   { id: "pf", name: "PF", carrier: "parcelforce", min_weight_g: 30001, max_weight_g: null, price_pence: 2495, estimated_days: null },
 ];
 
-const base = { products: [lining, roll, paper], trade: false, rates, fulfilment: "delivery" as const, discount: null, freeThreshold: 7500 };
+const base = { products: [lining, roll, paper], trade: false, rates, fulfilment: "delivery" as const, discount: null, freeThreshold: 7500, vatRatePct: 20 };
 
 describe("validateLine", () => {
   it("enforces min length and step", () => {
@@ -77,8 +77,16 @@ describe("quote", () => {
     expect(q.valid).toBe(true);
   });
 
-  it("computes VAT included at 20%", () => {
+  it("computes VAT included at the given rate, not a hardcoded 20%", () => {
     const q = quote({ ...base, fulfilment: "collection", lines: [{ productId: "paper", quantity: 1 }] });
     expect(q.vat).toBe(208); // 1250 - 1250/1.2
+    expect(q.vatRate).toBe(20);
+
+    const zero = quote({ ...base, vatRatePct: 0, fulfilment: "collection", lines: [{ productId: "paper", quantity: 1 }] });
+    expect(zero.vat).toBe(0);
+    expect(zero.vatRate).toBe(0);
+
+    const reduced = quote({ ...base, vatRatePct: 17.5, fulfilment: "collection", lines: [{ productId: "paper", quantity: 1 }] });
+    expect(reduced.vat).toBe(186); // 1250 - 1250/1.175 = 186.17
   });
 });

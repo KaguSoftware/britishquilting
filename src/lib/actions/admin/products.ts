@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { sendBackInStock } from "@/lib/email";
@@ -86,10 +86,12 @@ async function notifyIfRestocked(db: SupabaseClient, productId: string, before: 
   }
 }
 
-function refresh(id?: string) {
+function refresh(id?: string, slug?: string) {
   revalidatePath("/admin/products");
   if (id) revalidatePath(`/admin/products/${id}`);
   revalidatePath("/", "layout");
+  revalidateTag("products", { expire: 0 });
+  if (slug) revalidateTag(`product:${slug}`, { expire: 0 });
 }
 
 export async function saveProduct(input: ProductInput): Promise<ActionResult<{ id: string }>> {
@@ -118,13 +120,15 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
   };
 
   let before = 0;
+  let previousSlug: string | undefined;
   if (isNew) {
     const { error } = await db.from("products").insert({ id, ...row });
     if (error) return fail("Couldn't create the product. Please try again.");
   } else {
-    const { data: prev } = await db.from("products").select("stock_qty").eq("id", id).maybeSingle();
+    const { data: prev } = await db.from("products").select("stock_qty, slug").eq("id", id).maybeSingle();
     if (!prev) return fail("This product no longer exists.");
     before = Number(prev.stock_qty);
+    previousSlug = prev.slug;
     const { error } = await db.from("products").update(row).eq("id", id);
     if (error) return fail("Couldn't save the product. Please try again.");
   }
@@ -155,7 +159,8 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
 
   const notified = isNew ? 0 : await notifyIfRestocked(db, id, before, Number(p.stock_qty));
   await audit(db, viewer.id, isNew ? "product.create" : "product.update", "product", id, { name: p.name });
-  refresh(id);
+  refresh(id, slug);
+  if (previousSlug && previousSlug !== slug) revalidateTag(`product:${previousSlug}`, { expire: 0 });
   return ok(
     { id },
     `${isNew ? "Product created" : "Saved"}${notified ? `. ${notified} ${notified === 1 ? "person has" : "people have"} been told it's back in stock` : ""}.`,
@@ -165,10 +170,10 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
 export async function setProductActive(id: string, active: boolean): Promise<ActionResult> {
   if (!z.uuid().safeParse(id).success) return fail("Invalid product.");
   const { db, viewer } = await staffDb();
-  const { error } = await db.from("products").update({ is_active: active }).eq("id", id);
+  const { data: updated, error } = await db.from("products").update({ is_active: active }).eq("id", id).select("slug").maybeSingle();
   if (error) return fail("Couldn't update the product.");
   await audit(db, viewer.id, active ? "product.show" : "product.hide", "product", id);
-  refresh(id);
+  refresh(id, updated?.slug);
   return ok(undefined, active ? "Now showing on the shop." : "Hidden from the shop.");
 }
 
@@ -176,14 +181,14 @@ export async function updateStock(id: string, qty: number): Promise<ActionResult
   const parsed = z.object({ id: z.uuid(), qty: z.number().min(0).max(1_000_000) }).safeParse({ id, qty });
   if (!parsed.success) return fail("Please enter a stock amount of 0 or more.");
   const { db, viewer } = await staffDb();
-  const { data: prev } = await db.from("products").select("stock_qty").eq("id", id).maybeSingle();
+  const { data: prev } = await db.from("products").select("stock_qty, slug").eq("id", id).maybeSingle();
   if (!prev) return fail("This product no longer exists.");
   const before = Number(prev.stock_qty);
   const { error } = await db.from("products").update({ stock_qty: qty }).eq("id", id);
   if (error) return fail("Couldn't update the stock.");
   const notified = await notifyIfRestocked(db, id, before, qty);
   await audit(db, viewer.id, "product.stock", "product", id, { from: before, to: qty });
-  refresh(id);
+  refresh(id, prev.slug);
   return ok({ previous: before }, `Stock updated${notified ? `. ${notified} waiting ${notified === 1 ? "customer" : "customers"} emailed` : ""}.`);
 }
 
@@ -191,12 +196,12 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
   if (!z.uuid().safeParse(id).success) return fail("Invalid product.");
   const { db, viewer } = await staffDb();
   const { data: imgs } = await db.from("product_images").select("storage_path").eq("product_id", id);
-  const { data: prod } = await db.from("products").select("name").eq("id", id).maybeSingle();
+  const { data: prod } = await db.from("products").select("name, slug").eq("id", id).maybeSingle();
   const { error } = await db.from("products").delete().eq("id", id);
   if (error) return fail("Couldn't delete the product. Try hiding it instead.");
   const paths = (imgs ?? []).map((i) => i.storage_path).filter((p) => !p.startsWith("http") && !p.startsWith("/"));
   if (paths.length) await db.storage.from("products").remove(paths);
   await audit(db, viewer.id, "product.delete", "product", id, { name: prod?.name });
-  refresh();
+  refresh(undefined, prod?.slug);
   return ok(undefined, "Product deleted.");
 }

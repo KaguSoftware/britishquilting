@@ -203,22 +203,38 @@ export type FinanceOrder = {
   paid_at: string;
   is_trade: boolean;
   items: FinanceItem[];
+  /** Fee actually charged when this order was paid, frozen at that time. Null for orders that predate the snapshot. */
+  fee_pence?: number | null;
+  /** VAT rate this order was placed at. Defaults to 20 for orders that predate the column. */
+  vat_rate?: number | null;
 };
 
 /** returned_cost: cost price of goods this refund put back on the shelf, which stops being cost of goods sold. */
 export type FinanceRefund = { order_id: string; amount_pence: number; vat_pence: number; created_at: string; returned_cost?: number };
 export type FinanceExpense = { amount_pence: number; vat_pence: number; spent_on: string };
+/** A Stripe dispute's balance-transaction line: amount_pence is signed, negative when funds are taken, positive when returned. */
+export type FinanceChargeback = { amount_pence: number; fee_pence: number; created_at: string };
 
-/** Cost of goods for one order and how many product lines had no cost price. */
-export function orderCogs(items: FinanceItem[]) {
+/** The fee actually charged, if snapshotted when the order was paid; otherwise an estimate at today's rates. */
+export function orderFee(o: Pick<FinanceOrder, "payment_provider" | "total_pence" | "fee_pence">, s: FeeSettings = DEFAULT_FEES) {
+  return o.fee_pence ?? estimateFee(o.payment_provider, o.total_pence, s);
+}
+
+/** Cost of goods for one order and how many product lines had no cost price (and their sales, before VAT). */
+export function orderCogs(items: FinanceItem[], vatRatePct = 20) {
   let cogs = 0;
   let missing = 0;
+  let missingSalesGross = 0;
   for (const i of items) {
-    if (i.is_swatch || !i.product_id) continue;
-    if (i.cost_pence == null) missing++;
-    else cogs += i.cost_pence * lineQty(i.sale_mode, i.length_m, i.quantity);
+    if (i.is_swatch) continue;
+    if (i.cost_pence == null) {
+      missing++;
+      missingSalesGross += i.line_total_pence;
+    } else {
+      cogs += i.cost_pence * lineQty(i.sale_mode, i.length_m, i.quantity);
+    }
   }
-  return { cogs: Math.round(cogs), missing };
+  return { cogs: Math.round(cogs), missing, missingSales: Math.round(missingSalesGross - vatFromGross(missingSalesGross, vatRatePct)) };
 }
 
 export type Ledger = {
@@ -233,29 +249,46 @@ export type Ledger = {
   fees: number;
   cogs: number;
   costMissing: number;
+  /** Sales, before VAT, on lines with no cost price: how much of revenue the costMissing warning covers. */
+  costMissingSales: number;
+  /** Money taken back by lost card disputes in this period, net of any later reinstatement. */
+  chargebacks: number;
+  /** Dispute fees the provider charged, e.g. Stripe's dispute fee. */
+  disputeFees: number;
   expensesExVat: number;
   expensesVat: number;
   profit: number;
 };
 
-export function computeLedger(orders: FinanceOrder[], refunds: FinanceRefund[], expenses: FinanceExpense[], s: FeeSettings = DEFAULT_FEES): Ledger {
-  let gross = 0, vatSales = 0, shipping = 0, discounts = 0, fees = 0, cogs = 0, costMissing = 0;
+export function computeLedger(
+  orders: FinanceOrder[],
+  refunds: FinanceRefund[],
+  expenses: FinanceExpense[],
+  s: FeeSettings = DEFAULT_FEES,
+  chargebacks: FinanceChargeback[] = [],
+): Ledger {
+  let gross = 0, vatSales = 0, shipping = 0, discounts = 0, fees = 0, cogs = 0, costMissing = 0, costMissingSales = 0;
   for (const o of orders) {
     gross += o.total_pence;
     vatSales += o.vat_included_pence;
     shipping += o.shipping_pence;
     discounts += o.discount_pence;
-    fees += estimateFee(o.payment_provider, o.total_pence, s);
-    const c = orderCogs(o.items);
+    fees += orderFee(o, s);
+    const c = orderCogs(o.items, o.vat_rate ?? 20);
     cogs += c.cogs;
     costMissing += c.missing;
+    costMissingSales += c.missingSales;
   }
   const refundTotal = refunds.reduce((a, r) => a + r.amount_pence, 0);
   const refundVat = refunds.reduce((a, r) => a + r.vat_pence, 0);
   cogs -= refunds.reduce((a, r) => a + (r.returned_cost ?? 0), 0);
   const expensesGross = expenses.reduce((a, e) => a + e.amount_pence, 0);
   const expensesVat = expenses.reduce((a, e) => a + e.vat_pence, 0);
-  const net = gross - refundTotal;
+  // Chargeback amounts are signed (negative = taken, positive = reinstated); a net negative sum is money lost.
+  const chargebackNet = chargebacks.reduce((a, c) => a + c.amount_pence, 0);
+  const chargebackTaken = Math.max(0, -chargebackNet);
+  const disputeFees = chargebacks.reduce((a, c) => a + c.fee_pence, 0);
+  const net = gross - refundTotal - chargebackTaken;
   const vat = vatSales - refundVat;
   const revenueExVat = net - vat;
   const expensesExVat = expensesGross - expensesVat;
@@ -271,9 +304,12 @@ export function computeLedger(orders: FinanceOrder[], refunds: FinanceRefund[], 
     fees,
     cogs,
     costMissing,
+    costMissingSales,
+    chargebacks: chargebackTaken,
+    disputeFees,
     expensesExVat,
     expensesVat,
-    profit: revenueExVat - fees - cogs - expensesExVat,
+    profit: revenueExVat - fees - disputeFees - cogs - expensesExVat,
   };
 }
 

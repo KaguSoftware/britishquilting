@@ -6,12 +6,13 @@ import {
   bucketUnit,
   computeLedger,
   DEFAULT_FEES,
-  estimateFee,
   lineQty,
   londonDay,
   orderCogs,
+  orderFee,
   type BucketUnit,
   type FeeSettings,
+  type FinanceChargeback,
   type FinanceExpense,
   type FinanceOrder,
   type FinanceRefund,
@@ -61,7 +62,7 @@ export type FinanceData = {
 };
 
 const ORDER_COLS =
-  "id, number, total_pence, vat_included_pence, shipping_pence, discount_pence, payment_provider, paid_at, is_trade, order_items(product_id, name, is_swatch, sale_mode, length_m, quantity, line_total_pence, cost_pence)";
+  "id, number, total_pence, vat_included_pence, vat_rate, fee_pence, shipping_pence, discount_pence, payment_provider, paid_at, is_trade, order_items(product_id, name, is_swatch, sale_mode, length_m, quantity, line_total_pence, cost_pence)";
 
 /** Supabase caps a select at 1000 rows, so page through. */
 async function all<T>(q: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
@@ -114,6 +115,12 @@ export async function loadExpenses(db: SupabaseClient, fromDay: string, toDay: s
     db.from("expenses").select("id, spent_on, supplier, category, amount_pence, vat_pence, note, receipt_path").gte("spent_on", fromDay).lte("spent_on", toDay).order("spent_on", { ascending: false }).order("created_at", { ascending: false }).range(a, b),
   );
 }
+/** Balance-transaction lines Stripe posted against disputes in the period (money taken and any later reinstated). */
+export async function loadChargebacks(db: SupabaseClient, start: Date, end: Date): Promise<FinanceChargeback[]> {
+  return all<FinanceChargeback>((a, b) =>
+    db.from("order_dispute_transactions").select("amount_pence, fee_pence, created_at").gte("created_at", start.toISOString()).lt("created_at", end.toISOString()).order("created_at").range(a, b),
+  );
+}
 export async function loadSettings(db: SupabaseClient): Promise<FeeSettings> {
   const { data } = await db.from("finance_settings").select("stripe_pct, stripe_fixed_pence, paypal_pct, paypal_fixed_pence, vat_rate").maybeSingle();
   if (!data) return DEFAULT_FEES;
@@ -131,7 +138,7 @@ const METHOD: Record<string, string> = { stripe: "Card (Stripe)", paypal: "PayPa
 const UNIT: Record<string, string> = { metre: "m", roll: "rolls", unit: "units" };
 
 export async function loadFinance(db: SupabaseClient, period: Period, prev: Period): Promise<FinanceData> {
-  const [settings, orders, prevOrders, refunds, prevRefunds, expenses, prevExpenses, unpaidRes, invoicedRes, productsRes, categoriesRes] = await Promise.all([
+  const [settings, orders, prevOrders, refunds, prevRefunds, expenses, prevExpenses, chargebacks, prevChargebacks, unpaidRes, invoicedRes, productsRes, categoriesRes] = await Promise.all([
     loadSettings(db),
     loadOrders(db, period.start, period.end),
     loadOrders(db, prev.start, prev.end),
@@ -139,6 +146,8 @@ export async function loadFinance(db: SupabaseClient, period: Period, prev: Peri
     loadRefunds(db, prev.start, prev.end),
     loadExpenses(db, period.fromDay, period.toDay),
     loadExpenses(db, prev.fromDay, prev.toDay),
+    loadChargebacks(db, period.start, period.end),
+    loadChargebacks(db, prev.start, prev.end),
     db
       .from("orders")
       .select("id, number, email, total_pence, created_at, invoice_due_at, shipping_address, billing_address")
@@ -159,8 +168,8 @@ export async function loadFinance(db: SupabaseClient, period: Period, prev: Peri
   ]);
 
   const fin = orders.map(asFinance);
-  const ledger = computeLedger(fin, refunds, expenses as FinanceExpense[], settings);
-  const previous = computeLedger(prevOrders.map(asFinance), prevRefunds, prevExpenses as FinanceExpense[], settings);
+  const ledger = computeLedger(fin, refunds, expenses as FinanceExpense[], settings, chargebacks);
+  const previous = computeLedger(prevOrders.map(asFinance), prevRefunds, prevExpenses as FinanceExpense[], settings, prevChargebacks);
 
   // Revenue and profit per bucket, each piece in the bucket of its own date.
   const unit = bucketUnit(period);
@@ -172,7 +181,13 @@ export async function loadFinance(db: SupabaseClient, period: Period, prev: Peri
     if (!b) continue;
     const rev = exVatShare(o.total_pence, o.vat_included_pence);
     b.revenue += rev;
-    b.profit += rev - estimateFee(o.payment_provider, o.total_pence, settings) - orderCogs(o.items).cogs;
+    b.profit += rev - orderFee(o, settings) - orderCogs(o.items, o.vat_rate ?? 20).cogs;
+  }
+  for (const c of chargebacks) {
+    const b = map.get(bucketKey(londonDay(new Date(c.created_at)), unit));
+    if (!b) continue;
+    b.revenue -= Math.max(0, -c.amount_pence);
+    b.profit -= Math.max(0, -c.amount_pence) + c.fee_pence;
   }
   for (const r of refunds) {
     const b = map.get(bucketKey(londonDay(new Date(r.created_at)), unit));

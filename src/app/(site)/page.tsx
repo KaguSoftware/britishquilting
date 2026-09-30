@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { IconArrowRight as ArrowRight, IconTape as Ruler, IconScissors as Scissors, IconVan as Truck } from "@/components/icons";
 import { Hero, type HeroCategory } from "@/components/hero/hero";
 import { Crown } from "@/components/site/brand";
 import { Reveal } from "@/components/site/reveal";
 import { ProductCard, type ProductCardData } from "@/components/shop/product-card";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/server";
 
 const FALLBACK: HeroCategory[] = [
   { slug: "linings", name: "Linings", blurb: "Cotton sateen and blackout, cut to your length." },
@@ -12,26 +13,32 @@ const FALLBACK: HeroCategory[] = [
   { slug: "paper", name: "Paper", blurb: "Pattern and tissue papers for the workroom." },
 ];
 
-async function getHomeData() {
-  try {
-    const supabase = await createClient();
-    const [{ data: cats }, { data: featured }] = await Promise.all([
-      supabase.from("categories").select("slug, name, description").is("parent_id", null).order("sort_order"),
-      supabase
-        .from("products_public")
-        .select("id, slug, name, subtitle, sale_mode, price_pence, compare_at_pence, in_stock, low_stock, colour_hex, rating_avg, rating_count, product_images(storage_path, alt, sort_order)")
-        .eq("is_featured", true)
-        .order("sort_order")
-        .limit(4),
-    ]);
-    return {
-      categories: cats?.length ? cats.map((c) => ({ slug: c.slug, name: c.name, blurb: c.description ?? "" })) : FALLBACK,
-      featured: (featured ?? []) as unknown as ProductCardData[],
-    };
-  } catch {
-    return { categories: FALLBACK, featured: [] as ProductCardData[] };
-  }
-}
+// Genuinely public (no viewer-specific data), so it's safe to cache: see src/lib/data/shop.ts
+// for the same treatment of the shop/product/journal reads and the tags admin edits invalidate.
+const getHomeData = unstable_cache(
+  async () => {
+    try {
+      const supabase = createPublicClient();
+      const [{ data: cats }, { data: featured }] = await Promise.all([
+        supabase.from("categories").select("slug, name, description").is("parent_id", null).order("sort_order"),
+        supabase
+          .from("products_public")
+          .select("id, slug, name, subtitle, sale_mode, price_pence, compare_at_pence, in_stock, low_stock, colour_hex, rating_avg, rating_count, product_images(storage_path, alt, sort_order)")
+          .eq("is_featured", true)
+          .order("sort_order")
+          .limit(4),
+      ]);
+      return {
+        categories: cats?.length ? cats.map((c) => ({ slug: c.slug, name: c.name, blurb: c.description ?? "" })) : FALLBACK,
+        featured: (featured ?? []) as unknown as ProductCardData[],
+      };
+    } catch {
+      return { categories: FALLBACK, featured: [] as ProductCardData[] };
+    }
+  },
+  ["home-data"],
+  { tags: ["categories", "products"], revalidate: 300 },
+);
 
 export default async function HomePage() {
   const { categories, featured } = await getHomeData();

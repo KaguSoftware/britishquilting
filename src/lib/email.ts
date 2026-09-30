@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { render } from "@react-email/components";
 import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/server";
+import { env } from "@/lib/env";
 import { addDays, carrierLabel, trackingUrlFor } from "@/lib/checkout/helpers";
 import { formatMetres, formatPence, storageUrl } from "@/lib/utils";
 import OrderConfirmationEmail, { type OrderEmailProps } from "@/emails/order-confirmation";
@@ -15,6 +16,7 @@ import PaymentReceivedEmail from "@/emails/payment-received";
 import DeliveredEmail from "@/emails/delivered";
 import { TradeApprovedEmail, TradeRejectedEmail } from "@/emails/trade";
 import { BackInStockEmail, LowStockEmail } from "@/emails/stock";
+import { DisputeAlertEmail } from "@/emails/dispute-alert";
 import WelcomeNewsletterEmail from "@/emails/welcome-newsletter";
 import type { EmailAddress, EmailLine } from "@/emails/components";
 
@@ -24,13 +26,13 @@ import type { EmailAddress, EmailLine } from "@/emails/components";
  * All helpers swallow errors and return false: an email must never break a payment.
  */
 
-const site = () => (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
-const from = () => process.env.EMAIL_FROM ?? "British Quilting <orders@britishquilting.com>";
+const site = () => (env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const from = () => env.EMAIL_FROM ?? "British Quilting <orders@britishquilting.com>";
 let resend: Resend | null = null;
 
 export async function sendEmail({ to, subject, react, replyTo }: { to: string | string[]; subject: string; react: ReactElement; replyTo?: string }) {
   try {
-    const key = process.env.RESEND_API_KEY;
+    const key = env.RESEND_API_KEY;
     if (!key) {
       console.info(`[email] (RESEND_API_KEY not set) to=${String(to)} subject="${subject}"`);
       return false; // nothing was actually sent
@@ -438,7 +440,7 @@ export async function sendLowStock(productIds: string[]) {
       db.from("products").select("id, name, subtitle, sale_mode, stock_qty, low_stock_threshold").in("id", productIds),
       db.from("store_settings").select("low_stock_email").eq("id", 1).maybeSingle(),
     ]);
-    const to = settings?.low_stock_email || process.env.STAFF_NOTIFY_EMAIL;
+    const to = settings?.low_stock_email || env.STAFF_NOTIFY_EMAIL;
     if (!to || !products?.length) return false;
     const unit = (mode: string, n: number) => (mode === "metre" ? formatMetres(n) : `${n}`);
     return await sendEmail({
@@ -455,6 +457,35 @@ export async function sendLowStock(productIds: string[]) {
     });
   } catch (e) {
     console.error("sendLowStock", e);
+    return false;
+  }
+}
+
+/** Staff alert for a Stripe dispute (chargeback), sent the first time its status changes. */
+export async function sendDisputeAlert(orderId: string, dispute: { id: string; amount: number; reason: string | null; status: string; evidenceDueBy: string | null }) {
+  try {
+    const db = createAdminClient();
+    const [{ data: order }, { data: settings }] = await Promise.all([
+      db.from("orders").select("number").eq("id", orderId).maybeSingle(),
+      db.from("store_settings").select("low_stock_email").eq("id", 1).maybeSingle(),
+    ]);
+    const to = settings?.low_stock_email || env.STAFF_NOTIFY_EMAIL;
+    if (!to || !order) return false;
+    return await sendEmail({
+      to,
+      subject: `Payment disputed: order #${order.number}`,
+      react: DisputeAlertEmail({
+        orderNumber: order.number,
+        amount: formatPence(dispute.amount),
+        reason: dispute.reason ?? "Not given",
+        status: dispute.status,
+        evidenceDueBy: dispute.evidenceDueBy,
+        dashboardUrl: `https://dashboard.stripe.com/disputes/${dispute.id}`,
+        adminUrl: `${site()}/admin/orders/${orderId}`,
+      }),
+    });
+  } catch (e) {
+    console.error("sendDisputeAlert", e);
     return false;
   }
 }

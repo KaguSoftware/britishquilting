@@ -4,7 +4,7 @@ import { IconPrint } from "@/components/icons";
 import { staffDb } from "@/lib/actions/admin/guard";
 import { formatPence, storageUrl } from "@/lib/utils";
 import { Badge, ButtonLink, Card, PageHeader } from "@/components/admin/ui";
-import { CopyButton } from "@/components/admin/controls";
+import { CopyButton } from "@/components/ui/copy-button";
 import { ORDER_STATUS, addressLines, carrierLabel, cutInstruction, formatDateTime, type Address, type OrderStatus } from "@/components/admin/format";
 import { OrderActions } from "@/components/admin/orders/order-actions";
 import { OrderNotes } from "@/components/admin/orders/order-notes";
@@ -15,13 +15,14 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { db } = await staffDb();
-  const [{ data: order }, { data: items }, { data: events }, { data: shipments }, { data: refunds }, { data: previous }] = await Promise.all([
+  const [{ data: order }, { data: items }, { data: events }, { data: shipments }, { data: refunds }, { data: previous }, { data: disputed }] = await Promise.all([
     db.from("orders").select("*").eq("id", id).maybeSingle(),
     db.from("order_items").select("*").eq("order_id", id),
     db.from("order_events").select("*, actor:profiles(full_name, email)").eq("order_id", id).order("created_at", { ascending: false }),
     db.from("shipments").select("*").eq("order_id", id).order("shipped_at", { ascending: false }),
     db.from("order_refunds").select("*, actor:profiles(full_name, email)").eq("order_id", id).order("created_at", { ascending: true }),
     db.rpc("order_previous_status", { p_order_id: id }),
+    db.rpc("order_disputed", { p_order_id: id }),
   ]);
   if (!order) notFound();
   const { data: profile } = order.user_id ? await db.from("profiles").select("id, full_name, phone, company_name").eq("id", order.user_id).maybeSingle() : { data: null };
@@ -63,6 +64,8 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
           paid_at: order.paid_at,
           total_pence: order.total_pence,
           refunded_pence: order.refunded_pence ?? 0,
+          chargeback_pence: order.chargeback_pence ?? 0,
+          disputed: Boolean(disputed),
           email: order.email,
         }}
         items={(items ?? []).map((i) => ({
@@ -225,6 +228,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               <Row label="Paid" value={order.paid_at ? formatDateTime(order.paid_at) : "Not yet"} />
               {order.invoice_due_at && !order.paid_at && <Row label="Invoice due" value={formatDateTime(order.invoice_due_at)} />}
               {order.payment_ref && <Row label="Reference" value={<span className="break-all font-mono text-xs">{order.payment_ref}</span>} />}
+              {order.chargeback_pence > 0 && <Row label="Taken back by dispute" value={<span className="text-danger">{formatPence(order.chargeback_pence)}</span>} />}
             </dl>
           </Card>
 

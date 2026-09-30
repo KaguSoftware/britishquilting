@@ -5,6 +5,8 @@ import {
   computeLedger,
   estimateFee,
   londonMidnight,
+  orderCogs,
+  orderFee,
   parsePounds,
   previousPeriod,
   resolvePeriod,
@@ -102,6 +104,24 @@ describe("money", () => {
     expect(vatFromGross(12000)).toBe(2000);
     expect(vatFromGross(1000)).toBe(167);
     expect(vatFromGross(1000, 0)).toBe(0);
+  });
+
+  it("prefers the fee snapshotted at payment time over today's rates", () => {
+    const s = { stripe_pct: 3, stripe_fixed_pence: 50, paypal_pct: 3, paypal_fixed_pence: 50, vat_rate: 20 };
+    expect(orderFee({ payment_provider: "stripe", total_pence: 10000, fee_pence: 170 }, s)).toBe(170); // frozen at the old rate
+    expect(orderFee({ payment_provider: "stripe", total_pence: 10000, fee_pence: null }, s)).toBe(350); // no snapshot: estimate at today's rate
+  });
+
+  it("counts a line with no product (e.g. a deleted product) as cost of goods, not silently free", () => {
+    const items = [
+      { product_id: "p", is_swatch: false, sale_mode: "unit", length_m: null, quantity: 1, line_total_pence: 1000, cost_pence: 300 },
+      { product_id: null, is_swatch: false, sale_mode: "unit", length_m: null, quantity: 1, line_total_pence: 1200, cost_pence: 400 },
+      { product_id: null, is_swatch: false, sale_mode: "unit", length_m: null, quantity: 1, line_total_pence: 1200, cost_pence: null },
+    ];
+    const c = orderCogs(items, 20);
+    expect(c.cogs).toBe(700); // 300 + 400, the null product_id line still counts
+    expect(c.missing).toBe(1);
+    expect(c.missingSales).toBe(1000); // 1200 - vatFromGross(1200, 20)
   });
 
   it("parses pounds", () => {

@@ -10,7 +10,7 @@ export function OrderSearch({ initial }: { initial: string }) {
   const [q, setQ] = useState(initial);
   const submit = (value: string) => {
     const u = new URLSearchParams(params.toString());
-    u.delete("limit");
+    u.delete("page");
     if (value.trim()) {
       u.set("q", value.trim());
       u.set("tab", "all");
