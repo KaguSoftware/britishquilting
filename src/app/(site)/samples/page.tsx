@@ -15,7 +15,10 @@ export const metadata: Metadata = {
 };
 
 export default async function SamplesPage() {
-  const [categories, products] = await Promise.all([getCategories(), getListProducts()]);
+  // Falls back to the empty state if Supabase is unreachable at build time (e.g. CI placeholders).
+  const [categories, products] = await Promise.all([getCategories(), getListProducts()]).catch(
+    () => [[], []] as [Awaited<ReturnType<typeof getCategories>>, Awaited<ReturnType<typeof getListProducts>>],
+  );
   const swatchable = products.filter((p) => p.swatch_enabled && p.sale_mode !== "unit");
   const groups = categories
     .map((c) => ({ c, items: swatchable.filter((p) => p.category_id === c.id) }))
