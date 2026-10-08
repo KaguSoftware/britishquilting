@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { IconPrint } from "@/components/icons";
+import { IconDocument, IconPrint } from "@/components/icons";
 import { staffDb } from "@/lib/actions/admin/guard";
 import { formatPence, storageUrl } from "@/lib/utils";
 import { Badge, ButtonLink, Card, PageHeader } from "@/components/admin/ui";
@@ -47,9 +47,14 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         }
         description={`Placed ${formatDateTime(order.created_at)}. ${status?.help ?? ""}`}
         actions={
-          <ButtonLink href={`/admin/orders/${order.id}/print`} target="_blank" variant="secondary">
-            <IconPrint className="size-4" /> Packing slip
-          </ButtonLink>
+          <>
+            <ButtonLink href={`/admin/orders/${order.id}/invoice`} target="_blank" variant="secondary">
+              <IconDocument className="size-4" /> Invoice
+            </ButtonLink>
+            <ButtonLink href={`/admin/orders/${order.id}/print`} target="_blank" variant="secondary">
+              <IconPrint className="size-4" /> Packing slip
+            </ButtonLink>
+          </>
         }
       />
 

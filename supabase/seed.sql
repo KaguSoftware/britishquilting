@@ -2,7 +2,11 @@
 insert into public.categories (slug, name, description, sort_order) values
   ('linings', 'Linings', 'Cotton and sateen curtain linings, cut to your length.', 1),
   ('interlinings', 'Interlinings', 'Bump, domette and thermal interlinings for fuller, warmer drapes.', 2),
-  ('paper', 'Paper', 'Pattern and tissue paper for the workroom.', 3)
+  ('paper', 'Paper', 'Pattern and tissue paper for the workroom.', 3),
+  ('fabrics-and-ties', 'Fabrics & Ties', 'Face fabrics and finishing tiebacks for made-to-measure curtains and blinds.', 0),
+  ('trimmings', 'Trimmings', 'Fringes, braids, piping and ribbons to finish a leading edge or a pelmet.', 4),
+  ('accessories', 'Accessories', 'Heading tapes, hooks, weights and the small things every workroom runs on.', 5),
+  ('shade-cards', 'Shade Cards', 'Printed cards showing every colour in a range, to match cloth at home before you order.', 6)
 on conflict (slug) do nothing;
 
 insert into public.products (slug, name, subtitle, description, category_id, sale_mode, price_pence, trade_price_pence,

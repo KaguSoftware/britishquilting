@@ -42,14 +42,17 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
   ]);
   const category = categories.find((c) => c.id === p.category_id) ?? null;
   const images = [...(p.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
-  // Open on the colour in the link, else the first one in stock.
+  // Open on the colour in the link (by id or name), else the first one in stock.
   const initialColour =
-    p.variants.find((v) => v.id === wanted)?.id ?? p.variants.find((v) => v.in_stock)?.id ?? p.variants[0]?.id ?? null;
+    p.variants.find((v) => v.id === wanted || (typeof wanted === "string" && v.name.toLowerCase() === wanted.toLowerCase()))?.id ??
+    p.variants.find((v) => v.in_stock)?.id ??
+    p.variants[0]?.id ??
+    null;
   const colourNames = p.variants.length ? p.variants.map((v) => v.name).join(", ") : p.colour;
   const related = all
     .filter((x) => x.id !== p.id)
     .sort((a, b) => Number(b.category_id === p.category_id) - Number(a.category_id === p.category_id) || a.sort_order - b.sort_order)
-    .slice(0, 5);
+    .slice(0, 4);
   const isMetre = p.sale_mode === "metre";
 
   const jsonLd = {
@@ -297,9 +300,9 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
               View all <IconArrowRight className="size-4" />
             </Link>
           </Reveal>
-          <ul className="mt-12 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-x-5 lg:grid-cols-5">
+          <ul className="mt-12 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-x-6">
             {related.map((r, i) => (
-              <Reveal as="li" key={r.id} delay={i * 0.06} className={i === 4 ? "hidden lg:block" : undefined}>
+              <Reveal as="li" key={r.id} delay={i * 0.06}>
                 <ProductCard p={r} />
               </Reveal>
             ))}

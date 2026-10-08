@@ -25,13 +25,13 @@ const unitLabel = { metre: "/ metre", roll: "/ roll", unit: "" } as const;
 
 const MAX_DOTS = 5;
 
-export function ProductCard({ p, sizes = "(min-width: 1024px) 20vw, (min-width: 768px) 25vw, 50vw" }: { p: ProductCardData; sizes?: string }) {
+export function ProductCard({ p, sizes = "(min-width: 768px) 25vw, 50vw" }: { p: ProductCardData; sizes?: string }) {
   const imgs = [...(p.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
   const [first, second] = imgs;
   const colours = p.variants ?? [];
   return (
     <Link href={`/product/${p.slug}`} className="group block">
-      <div className="relative aspect-[2/3] overflow-hidden bg-cream-200">
+      <div className="relative aspect-[4/5] overflow-hidden bg-cream-200">
         {first ? (
           <>
             <Image
@@ -63,7 +63,7 @@ export function ProductCard({ p, sizes = "(min-width: 1024px) 20vw, (min-width: 
       </div>
       <div className="mt-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="font-display truncate text-lg leading-tight md:text-xl">{p.name}</h3>
+          <h3 className="font-display truncate text-xl leading-tight md:text-2xl">{p.name}</h3>
           {p.subtitle && <p className="mt-0.5 truncate text-sm text-ink-soft">{p.subtitle}</p>}
         </div>
         {p.rating_count > 0 && (
@@ -95,6 +95,23 @@ export function ProductCard({ p, sizes = "(min-width: 1024px) 20vw, (min-width: 
         </p>
       )}
     </Link>
+  );
+}
+
+/** A stand-in card for a shelf that has nothing on sale yet: same shape as a product card, not a link. */
+export function PlaceholderCard({ p }: { p: { name: string; subtitle: string; hex: string } }) {
+  return (
+    <article className="group" aria-label={`${p.name}, coming soon`}>
+      <div className="relative aspect-[4/5] overflow-hidden bg-cream-200">
+        <FabricPlaceholder hex={p.hex} name={p.name} />
+        <span className="absolute left-3 top-3 bg-cream-50 px-2 py-0.5 font-serif text-sm italic text-ink-soft">Coming soon</span>
+      </div>
+      <div className="mt-4 min-w-0">
+        <h3 className="font-display truncate text-xl leading-tight text-ink-soft md:text-2xl">{p.name}</h3>
+        <p className="mt-0.5 truncate text-sm text-stone-500">{p.subtitle}</p>
+      </div>
+      <p className="mt-2 text-sm text-stone-500">Price to follow</p>
+    </article>
   );
 }
 

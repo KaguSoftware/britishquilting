@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { IconClose, IconSearch } from "@/components/icons";
 
-export function OrderSearch({ initial }: { initial: string }) {
+export function OrderSearch({ initial, path = "/admin/orders", placeholder = "Order number, email or name" }: { initial: string; path?: string; placeholder?: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const [q, setQ] = useState(initial);
@@ -16,7 +16,7 @@ export function OrderSearch({ initial }: { initial: string }) {
       u.set("tab", "all");
       u.delete("view");
     } else u.delete("q");
-    router.push(`/admin/orders?${u}`);
+    router.push(`${path}?${u}`);
   };
   return (
     <form
@@ -31,9 +31,9 @@ export function OrderSearch({ initial }: { initial: string }) {
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Order number, email or name"
+        placeholder={placeholder}
         className="h-10 w-full rounded-[3px] border border-ink/15 bg-white pl-9 pr-9 text-sm focus:border-aubergine-500 focus:outline-none"
-        aria-label="Search orders"
+        aria-label={placeholder}
       />
       {q && (
         <button

@@ -2,11 +2,12 @@ import Link from "next/link";
 import { Suspense } from "react";
 import {IconArrowRight} from "@/components/icons";
 import { Reveal } from "@/components/site/reveal";
-import { ProductCard } from "@/components/shop/product-card";
+import { PlaceholderCard, ProductCard } from "@/components/shop/product-card";
 import { FilterBar } from "@/components/shop/filter-bar";
 import { FilterPendingOverlay, FilterTransitionProvider } from "@/components/shop/filter-transition";
 import { Breadcrumbs, EmptyState, btnSecondary } from "@/components/shop/bits";
 import { applyFilters, buildFacets, parseFilters, type Category, type ListProduct } from "@/lib/data/shop";
+import { DEFAULT_PLACEHOLDERS, SHOP_SECTIONS, sectionFor } from "@/lib/shop-sections";
 import { cn } from "@/lib/utils";
 
 export const CATEGORY_COPY: Record<string, { eyebrow: string; title: string; lede: string; note: string }> = {
@@ -27,6 +28,36 @@ export const CATEGORY_COPY: Record<string, { eyebrow: string; title: string; led
     title: "Weight, warmth and that full drape",
     lede: "Bump, domette, flannelette and synthetic sarille. The hidden layer that gives hand-made curtains their generous, insulated fall.",
     note: "Bump is the heaviest; domette is lighter and ideal for Roman blinds.",
+  },
+  "fabrics-and-ties": {
+    eyebrow: "Fabrics & ties",
+    title: "Face cloth and the finishing touch",
+    lede: "Linen unions, wools and ticking stripes for the face of a curtain, with rope and tassel tiebacks to hold it back.",
+    note: "Pair any face fabric with a lining from our sateen range.",
+  },
+  trimmings: {
+    eyebrow: "Trimmings",
+    title: "Fringe, braid and piping",
+    lede: "Bullion and bobble fringes, woven braids, piping cord and ribbons, sold by the metre to finish a leading edge or a pelmet.",
+    note: "Hold a trimming against your face fabric before you cut. Swatches are free.",
+  },
+  accessories: {
+    eyebrow: "Accessories",
+    title: "The workroom essentials",
+    lede: "Heading tapes, hooks, lead weights, buckram and needles. The small things that make a curtain hang properly.",
+    note: "Heading tape is sold by the metre and cut to your length.",
+  },
+  "shade-cards": {
+    eyebrow: "Shade cards",
+    title: "Every colour, in your hand",
+    lede: "Printed cards carrying a cutting of every colour in a range, so you can match cloth to paint, light and furniture at home before you order.",
+    note: "Want a single colour instead? Order a free swatch from any product page.",
+  },
+  "special-offers": {
+    eyebrow: "Special offers",
+    title: "End of roll and clearance",
+    lede: "Short lengths, seconds and discontinued colours at reduced prices. When a length has gone, it has gone.",
+    note: "Offers are cut to order like everything else, while stock lasts.",
   },
   paper: {
     eyebrow: "Workroom paper",
@@ -57,7 +88,17 @@ export function ShopListing({
   const facets = buildFacets(products);
   const results = applyFilters(products, filters);
   const hasFilters = filters.colour.length + filters.composition.length + filters.width.length > 0 || filters.inStock;
-  const heroSwatches = products.filter((p) => p.colour_hex).slice(0, 7);
+  const section = category ? sectionFor(category.slug) : null;
+  // While a shelf is empty, show what's coming so the page never looks broken.
+  const placeholders = products.length === 0 ? (section?.placeholders ?? DEFAULT_PLACEHOLDERS) : [];
+  const heroSwatches = (
+    products.length ? products.filter((p) => p.colour_hex).map((p) => ({ id: p.id, hex: p.colour_hex! })) : placeholders.map((p, i) => ({ id: String(i), hex: p.hex }))
+  ).slice(0, 7);
+  // Nav sections first, in nav order, then any other categories.
+  const tabs = [
+    ...SHOP_SECTIONS.map((s) => ({ slug: s.slug, name: s.name })),
+    ...categories.filter((c) => !sectionFor(c.slug)).map((c) => ({ slug: c.slug, name: c.name })),
+  ];
 
   return (
     <>
@@ -81,7 +122,7 @@ export function ShopListing({
                     className="w-12 origin-bottom shadow-soft"
                     style={{
                       height: `${60 + ((i * 37) % 40)}%`,
-                      backgroundColor: p.colour_hex!,
+                      backgroundColor: p.hex,
                       backgroundImage:
                         "repeating-linear-gradient(45deg, rgb(0 0 0 / .04) 0 2px, transparent 2px 5px), linear-gradient(90deg, rgb(255 255 255 / .25), transparent 40%, rgb(0 0 0 / .08))",
                     }}
@@ -94,7 +135,7 @@ export function ShopListing({
         </div>
         <nav aria-label="Categories" className="relative mx-auto max-w-7xl px-4 md:px-8">
           <ul className="-mb-px flex gap-7 overflow-x-auto [scrollbar-width:none]">
-            {[{ slug: "", name: "All" }, ...categories].map((c) => {
+            {[{ slug: "", name: "All" }, ...tabs].map((c) => {
               const on = (category?.slug ?? "") === c.slug;
               return (
                 <li key={c.slug || "all"}>
@@ -117,16 +158,37 @@ export function ShopListing({
 
       <section className="mx-auto max-w-7xl px-4 pb-24 md:px-8 md:pb-32">
         <FilterTransitionProvider>
-          <Suspense fallback={<div className="h-[82px] border-b border-stone-300" />}>
-            <FilterBar facets={facets} count={results.length} total={products.length} />
-          </Suspense>
+          {placeholders.length === 0 && (
+            <Suspense fallback={<div className="h-[82px] border-b border-stone-300" />}>
+              <FilterBar facets={facets} count={results.length} total={products.length} />
+            </Suspense>
+          )}
 
           <FilterPendingOverlay>
-            {results.length > 0 ? (
-              <ul className="mt-10 grid grid-cols-2 gap-x-4 gap-y-12 md:mt-14 md:grid-cols-4 md:gap-x-5 lg:grid-cols-5">
+            {placeholders.length > 0 ? (
+              <>
+                <p className="mt-10 flex flex-col gap-2 border-b border-stone-300 pb-5 text-sm text-ink-soft sm:flex-row sm:items-baseline sm:justify-between md:mt-14">
+                  <span>
+                    <span className="font-serif italic text-ink">{section?.kind === "offers" ? "No offers on the shelf today." : "Coming to the shop soon."}</span>{" "}
+                    {section?.kind === "offers" ? "Here's the sort of thing that turns up." : "A taste of what we're adding to this range."}
+                  </span>
+                  <Link href="/contact" className="inline-flex items-center gap-1.5 text-aubergine-700 hover:underline">
+                    Ask what&apos;s on the bolt today <IconArrowRight className="size-3.5" />
+                  </Link>
+                </p>
+                <ul className="mt-10 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-3 md:gap-x-6 lg:grid-cols-4">
+                  {placeholders.slice(0, 4).map((p, i) => (
+                    <Reveal as="li" key={`${p.name}-${i}`} delay={(i % 4) * 0.06}>
+                      <PlaceholderCard p={p} />
+                    </Reveal>
+                  ))}
+                </ul>
+              </>
+            ) : results.length > 0 ? (
+              <ul className="mt-10 grid grid-cols-2 gap-x-4 gap-y-12 md:mt-14 md:grid-cols-3 md:gap-x-6 lg:grid-cols-4">
                 {results.map((p, i) => (
-                  <Reveal as="li" key={p.id} delay={(i % 5) * 0.06}>
-                    <ProductCard p={p} />
+                  <Reveal as="li" key={p.id} delay={(i % 4) * 0.06}>
+                    <ProductCard p={p} sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw" />
                   </Reveal>
                 ))}
               </ul>

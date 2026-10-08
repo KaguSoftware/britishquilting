@@ -6,7 +6,7 @@ import { Reveal } from "@/components/site/reveal";
 
 const KEY = "bq-recently-viewed";
 const MAX = 10;
-const SHOW = 5;
+const SHOW = 4;
 
 function readIds(): string[] {
   try {
@@ -46,9 +46,9 @@ export function RecentlyViewedRail({ all, excludeId }: { all: ProductCardData[];
       <Reveal>
         <h2 className="font-display text-4xl md:text-5xl"><span className="mr-3 text-2xl italic text-gold-600">iv.</span>Recently viewed</h2>
       </Reveal>
-      <ul className="mt-12 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-x-5 lg:grid-cols-5">
+      <ul className="mt-12 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-x-6">
         {items.map((p, i) => (
-          <Reveal as="li" key={p.id} delay={i * 0.06} className={i === 4 ? "hidden lg:block" : undefined}>
+          <Reveal as="li" key={p.id} delay={i * 0.06}>
             <ProductCard p={p} />
           </Reveal>
         ))}

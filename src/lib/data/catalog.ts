@@ -37,7 +37,16 @@ const PRICED_COLUMNS =
 export async function getPricedProducts(ids: string[]): Promise<PricedProduct[]> {
   if (ids.length === 0) return [];
   const db = createAdminClient();
-  const { data, error } = await db.from("products").select(PRICED_COLUMNS).in("id", ids).eq("is_active", true);
+  let { data, error } = await db.from("products").select(PRICED_COLUMNS).in("id", ids).eq("is_active", true);
+  // A database without the colours migration: price every product as single-colour.
+  if (error && ["42703", "42P01", "PGRST200"].includes(error.code ?? "")) {
+    const legacy = await db
+      .from("products")
+      .select("id, name, sale_mode, price_pence, min_length_m, length_step_m, max_length_m, weight_g_per_unit, swatch_enabled, swatch_price_pence, stock_qty, track_stock, is_active")
+      .in("id", ids)
+      .eq("is_active", true);
+    ({ data, error } = { data: (legacy.data ?? []).map((p) => ({ ...p, product_variants: [] })) as typeof data, error: legacy.error });
+  }
   if (error) throw error;
   return (data ?? []).map(({ product_variants, ...p }) => ({
     ...p,

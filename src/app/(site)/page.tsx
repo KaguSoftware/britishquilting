@@ -26,7 +26,7 @@ const getHomeData = unstable_cache(
           .select("id, slug, name, subtitle, sale_mode, price_pence, compare_at_pence, in_stock, low_stock, colour_hex, rating_avg, rating_count, product_images(storage_path, alt, sort_order)")
           .eq("is_featured", true)
           .order("sort_order")
-          .limit(5),
+          .limit(4),
       ]);
       return {
         categories: cats?.length ? cats.map((c) => ({ slug: c.slug, name: c.name, blurb: c.description ?? "" })) : FALLBACK,
@@ -78,9 +78,9 @@ export default async function HomePage() {
               View all <ArrowRight className="size-4" />
             </Link>
           </Reveal>
-          <div className="mt-12 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-x-5 lg:grid-cols-5">
+          <div className="mt-12 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-x-6">
             {featured.map((p, i) => (
-              <Reveal key={p.id} delay={i * 0.08} className={i === 4 ? "hidden lg:block" : undefined}>
+              <Reveal key={p.id} delay={i * 0.08}>
                 <ProductCard p={p} />
               </Reveal>
             ))}

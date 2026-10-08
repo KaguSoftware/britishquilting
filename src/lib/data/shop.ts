@@ -16,6 +16,13 @@ type VariantRow = { id: string; name: string; colour_hex: string | null; stock_q
 
 const VARIANT_COLUMNS = "product_variants(id, name, colour_hex, stock_qty, sort_order)";
 
+/**
+ * True when a read failed only because this database predates the colours migration
+ * (no product_variants table, no product_images.variant_id). The shop then reads the
+ * older columns and shows every product as single-colour instead of erroring.
+ */
+const coloursMissing = (e: { code?: string } | null) => Boolean(e && ["42703", "42P01", "PGRST200", "PGRST204"].includes(e.code ?? ""));
+
 /** Variants in shop order with stock reduced to in/low flags, using the product's tracking and threshold. */
 function publicVariants(rows: VariantRow[] | null | undefined, p: { track_stock?: boolean; low_stock_threshold?: number | null }): PublicVariant[] {
   const track = p.track_stock ?? true;
@@ -73,6 +80,9 @@ export type Post = {
 
 const LIST_COLUMNS =
   "id, slug, name, subtitle, category_id, sale_mode, price_pence, compare_at_pence, in_stock, low_stock, colour, colour_hex, composition, width_cm, swatch_enabled, swatch_price_pence, is_featured, sort_order, created_at, rating_avg, rating_count, product_images(storage_path, alt, sort_order, variant_id)";
+/** LIST_COLUMNS for a database without the colours migration. */
+const LIST_COLUMNS_LEGACY =
+  "id, slug, name, subtitle, category_id, sale_mode, price_pence, compare_at_pence, in_stock, low_stock, colour, colour_hex, composition, width_cm, swatch_enabled, swatch_price_pence, is_featured, sort_order, created_at, rating_avg, rating_count, product_images(storage_path, alt, sort_order)";
 
 export type ListProduct = ProductCardData & {
   category_id: string | null;
@@ -114,12 +124,20 @@ export const getListProducts = cache(
   unstable_cache(
     async (): Promise<ListProduct[]> => {
       const supabase = createPublicClient();
-      const [{ data, error }, { data: colours, error: coloursError }] = await Promise.all([
+      const [list, colourRows] = await Promise.all([
         supabase.from("products_public").select(LIST_COLUMNS).order("sort_order"),
         supabase.from("products").select(`id, track_stock, low_stock_threshold, ${VARIANT_COLUMNS}`).eq("is_active", true),
       ]);
+      let { data, error } = list;
+      let colours = colourRows.data;
+      const coloursError = colourRows.error;
+      if (coloursMissing(error)) {
+        const legacy = await supabase.from("products_public").select(LIST_COLUMNS_LEGACY).order("sort_order");
+        ({ data, error } = { data: legacy.data as unknown as typeof data, error: legacy.error });
+      }
       if (error) throw error;
-      if (coloursError) throw coloursError;
+      if (coloursMissing(coloursError)) colours = [];
+      else if (coloursError) throw coloursError;
       const byId = new Map(
         (colours ?? []).map((c) => [c.id as string, publicVariants(c.product_variants as VariantRow[], c)]),
       );
@@ -136,11 +154,16 @@ export const getProduct = cache(async (slug: string): Promise<ProductDetail | nu
   return unstable_cache(
     async (): Promise<ProductDetail | null> => {
       const supabase = createPublicClient();
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from("products_public")
         .select("*, product_images(storage_path, alt, sort_order, variant_id)")
         .eq("slug", slug)
         .maybeSingle();
+      if (coloursMissing(error)) {
+        const legacy = await supabase.from("products_public").select("*, product_images(storage_path, alt, sort_order)").eq("slug", slug).maybeSingle();
+        ({ data, error } = { data: legacy.data as typeof data, error: legacy.error });
+      }
+      if (error) throw error;
       if (!data) return null;
       const { data: stock } = await supabase
         .from("products")

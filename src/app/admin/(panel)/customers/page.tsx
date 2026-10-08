@@ -1,17 +1,63 @@
 import Link from "next/link";
-import { IconUsers } from "@/components/icons";
+import { IconPlus, IconUsers } from "@/components/icons";
 import { staffDb } from "@/lib/actions/admin/guard";
-import { formatPence } from "@/lib/utils";
-import { Badge, EmptyState, PageHeader } from "@/components/admin/ui";
+import { CUSTOMER_COLS } from "@/lib/data/invoices";
+import type { ManualCustomer } from "@/lib/invoices";
+import { cn, formatPence } from "@/lib/utils";
+import { Badge, ButtonLink, EmptyState, PageHeader } from "@/components/admin/ui";
 import { formatDate } from "@/components/admin/format";
 import { Dropdown } from "@/components/ui/dropdown";
+import { CustomerBook } from "@/components/admin/customers/customer-book";
 
 export const metadata = { title: "Customers" };
 
-export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; sort?: string }> }) {
+export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; sort?: string; view?: string; add?: string }> }) {
   const sp = await searchParams;
   const q = (sp.q ?? "").trim().replace(/[%,()]/g, "");
+  const manual = sp.view === "manual";
   const { db } = await staffDb();
+
+  const header = (description: string) => (
+    <>
+      <PageHeader
+        title="Customers"
+        description={description}
+        actions={
+          <ButtonLink href="/admin/customers?view=manual&add=1">
+            <IconPlus className="size-4" /> Add customer
+          </ButtonLink>
+        }
+      />
+      <div className="mb-5 flex rounded-[3px] border border-ink/15 bg-cream-50 p-0.5 text-sm sm:inline-flex">
+        {[
+          { href: "/admin/customers", label: "Website accounts", on: !manual },
+          { href: "/admin/customers?view=manual", label: "Added by hand", on: manual },
+        ].map((v) => (
+          <Link key={v.href} href={v.href} className={cn("flex-1 rounded-[2px] px-3 py-1.5 text-center", v.on ? "bg-aubergine-800 text-cream-50" : "text-ink-soft")}>
+            {v.label}
+          </Link>
+        ))}
+      </div>
+    </>
+  );
+
+  if (manual) {
+    let query = db.from("manual_customers").select(CUSTOMER_COLS).order("full_name").limit(1000);
+    if (q) query = query.or(`full_name.ilike.%${q}%,company.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
+    const customers = ((await query).data ?? []) as ManualCustomer[];
+    return (
+      <div>
+        {header(`${customers.length} customer${customers.length === 1 ? "" : "s"} added by hand, for phone orders, trade accounts and anyone without a website account.`)}
+        <form className="mb-5 flex flex-wrap gap-2" action="/admin/customers">
+          <input type="hidden" name="view" value="manual" />
+          <input name="q" defaultValue={sp.q} placeholder="Name, company, email or phone" className="h-12 min-w-0 flex-1 basis-full rounded-[3px] border border-ink/15 bg-white px-3 text-base sm:basis-auto lg:h-10 lg:max-w-sm lg:text-sm" />
+          <button className="h-12 rounded-[3px] border border-ink/15 bg-cream-50 px-4 text-sm lg:h-10">Find</button>
+        </form>
+        <CustomerBook customers={customers} searching={!!q} adding={sp.add === "1"} />
+      </div>
+    );
+  }
+
   let query = db.from("profiles").select("id, email, full_name, company_name, role, created_at").order("created_at", { ascending: false }).limit(1000);
   if (q) query = query.or(`email.ilike.%${q}%,full_name.ilike.%${q}%,company_name.ilike.%${q}%`);
   const [{ data: people }, { data: orders }] = await Promise.all([
@@ -32,7 +78,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
 
   return (
     <div>
-      <PageHeader title="Customers" description={`${rows.length} account${rows.length === 1 ? "" : "s"}. Guests who checked out without an account appear on their orders only.`} />
+      {header(`${rows.length} account${rows.length === 1 ? "" : "s"}. Guests who checked out without an account appear on their orders only.`)}
       <form className="mb-5 flex flex-wrap gap-2" action="/admin/customers">
         <input name="q" defaultValue={sp.q} placeholder="Name, email or company" className="h-12 min-w-0 flex-1 basis-full rounded-[3px] border border-ink/15 bg-white px-3 text-base sm:basis-auto lg:h-10 lg:max-w-sm lg:text-sm" />
         <Dropdown

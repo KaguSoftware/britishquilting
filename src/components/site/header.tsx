@@ -14,7 +14,7 @@ const NAV = [
   { href: "/shop/linings", label: "Linings" },
   { href: "/shop/trimmings", label: "Trimmings" },
   { href: "/shop/accessories", label: "Accessories" },
-  { href: "/samples", label: "Shade Cards" },
+  { href: "/shop/shade-cards", label: "Shade Cards" },
   { href: "/shop/special-offers", label: "Special Offers" },
 ];
 

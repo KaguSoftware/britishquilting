@@ -362,7 +362,7 @@ export function ProductEditor({
         <div className="sticky top-8">
           <p className="mb-2 font-display text-lg italic text-stone-500">How it looks in the shop</p>
           <div className="overflow-hidden rounded-[3px] border border-ink/12 bg-cream-50">
-            <div className="relative aspect-[3/5] bg-cream-200" style={!preview.img && form.colour_hex ? { background: form.colour_hex } : undefined}>
+            <div className="relative aspect-[4/5] bg-cream-200" style={!preview.img && form.colour_hex ? { background: form.colour_hex } : undefined}>
               {preview.img ? (
                 <img src={preview.img} alt="" className="absolute inset-0 size-full object-cover" />
               ) : (

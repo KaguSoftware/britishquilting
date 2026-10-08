@@ -153,6 +153,16 @@ export const IconTag = (p: IconProps) => (
     <Stitch d="M11 6.2 17.8 13" />
   </Svg>
 );
+/** A sale roundel with a percent mark, ringed in stitching, for special offers */
+export const IconOffer = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8" />
+    <Stitch d="M12 1.5a10.5 10.5 0 1 1 0 21a10.5 10.5 0 1 1 0-21" />
+    <path d="m9.2 14.8 5.6-5.6" />
+    <circle cx="9.6" cy="9.6" r="1.1" />
+    <circle cx="14.4" cy="14.4" r="1.1" />
+  </Svg>
+);
 export const IconCard = (p: IconProps) => (
   <Svg {...p}>
     <rect x="3" y="5.5" width="18" height="13" rx="1.5" />
