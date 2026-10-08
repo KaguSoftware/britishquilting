@@ -10,7 +10,6 @@ import { Label, btnPrimary, inputCls } from "./bits";
 const TOPICS = [
   ["product", "A fabric question"],
   ["order", "An existing order"],
-  ["trade", "Trade account"],
   ["other", "Something else"],
 ] as const;
 

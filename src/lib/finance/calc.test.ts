@@ -141,7 +141,6 @@ describe("ledger", () => {
     discount_pence: 0,
     payment_provider: "stripe",
     paid_at: "2026-09-10T10:00:00Z",
-    is_trade: false,
     items: [],
     ...o,
   });
@@ -156,7 +155,7 @@ describe("ledger", () => {
             { product_id: "p", is_swatch: true, sale_mode: "metre", length_m: null, quantity: 1, line_total_pence: 0, cost_pence: null },
           ],
         }),
-        order({ id: "b", total_pence: 6000, vat_included_pence: 1000, shipping_pence: 0, discount_pence: 500, payment_provider: "invoice", is_trade: true }),
+        order({ id: "b", total_pence: 6000, vat_included_pence: 1000, shipping_pence: 0, discount_pence: 500, payment_provider: "invoice" }),
       ],
       [{ order_id: "o", amount_pence: 3000, vat_pence: 500, created_at: "2026-09-12T10:00:00Z" }],
       [{ amount_pence: 2400, vat_pence: 400, spent_on: "2026-09-02" }],

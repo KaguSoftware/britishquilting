@@ -32,12 +32,11 @@ export default async function CheckoutPage() {
 
   return (
     <CheckoutClient
-      viewer={viewer ? { email: viewer.email ?? "", fullName: viewer.fullName, phone, isTrade: viewer.isTrade } : null}
+      viewer={viewer ? { email: viewer.email ?? "", fullName: viewer.fullName, phone } : null}
       addresses={addresses}
       collection={
         settings?.collection_enabled ? { address: settings.collection_address ?? "London", hours: settings.collection_hours ?? null } : null
       }
-      invoiceTermsDays={settings?.invoice_terms_days ?? 30}
       payments={{
         stripeKey: stripeConfigured() ? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY! : null,
         paypalClientId: paypalConfigured() ? process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID! : null,

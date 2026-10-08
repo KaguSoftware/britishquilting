@@ -11,7 +11,6 @@ const items = [
   { href: "/account/orders", label: "Orders" },
   { href: "/account/addresses", label: "Addresses" },
   { href: "/account/wishlist", label: "Wishlist" },
-  { href: "/account/trade", label: "Trade account" },
   { href: "/account/settings", label: "Settings" },
 ];
 

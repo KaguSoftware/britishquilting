@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadStripe, type Appearance, type Stripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import { AnimatePresence, motion } from "motion/react";
-import { useCart } from "@/components/cart/cart-store";
+import { toLine, useCart } from "@/components/cart/cart-store";
 import { quoteCart, type CartQuote } from "@/lib/actions/cart";
 import type { CheckoutInput } from "@/lib/actions/checkout";
 import { isUkPhone, isValidUkPostcode, normalisePostcode } from "@/lib/checkout/helpers";
@@ -32,13 +32,12 @@ export type SavedAddress = {
   is_default: boolean;
 };
 
-export type CheckoutViewer = { email: string; fullName: string | null; phone: string | null; isTrade: boolean };
+export type CheckoutViewer = { email: string; fullName: string | null; phone: string | null };
 
 type Props = {
   viewer: CheckoutViewer | null;
   addresses: SavedAddress[];
   collection: { address: string; hours: string | null } | null;
-  invoiceTermsDays: number;
   payments: { stripeKey: string | null; paypalClientId: string | null };
 };
 
@@ -74,10 +73,10 @@ const appearance: Appearance = {
   },
 };
 
-export function CheckoutClient({ viewer, addresses, collection, invoiceTermsDays, payments }: Props) {
+export function CheckoutClient({ viewer, addresses, collection, payments }: Props) {
   const { items, hydrated } = useCart();
 
-  const lines = useMemo(() => items.map(({ productId, lengthM, quantity, isSwatch }) => ({ productId, lengthM, quantity, isSwatch })), [items]);
+  const lines = useMemo(() => items.map(toLine), [items]);
   const linesKey = JSON.stringify(lines);
 
   // Form state
@@ -97,7 +96,7 @@ export function CheckoutClient({ viewer, addresses, collection, invoiceTermsDays
   const [codeInput, setCodeInput] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
   const [codeBusy, setCodeBusy] = useState(false);
-  const [method, setMethod] = useState<PaymentMethod>(payments.stripeKey ? "card" : payments.paypalClientId ? "paypal" : viewer?.isTrade ? "invoice" : "card");
+  const [method, setMethod] = useState<PaymentMethod>(payments.stripeKey ? "card" : payments.paypalClientId ? "paypal" : "card");
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -308,7 +307,6 @@ export function CheckoutClient({ viewer, addresses, collection, invoiceTermsDays
                   <p className="text-sm text-ink-soft">Signed in as</p>
                   <p className="truncate font-medium">{viewer.email}</p>
                 </div>
-                {viewer.isTrade && <span className="text-sm text-aubergine-700">Trade prices applied</span>}
               </div>
             ) : (
               <>
@@ -333,7 +331,7 @@ export function CheckoutClient({ viewer, addresses, collection, invoiceTermsDays
                   <Link href="/login?next=/checkout" className="text-aubergine-700 underline underline-offset-4 hover:text-aubergine-900">
                     Sign in
                   </Link>{" "}
-                  for saved addresses and trade prices.
+                  for saved addresses.
                 </p>
               </>
             )}
@@ -486,8 +484,6 @@ export function CheckoutClient({ viewer, addresses, collection, invoiceTermsDays
               method={method}
               setMethod={setMethod}
               payments={payments}
-              isTrade={Boolean(viewer?.isTrade)}
-              invoiceTermsDays={invoiceTermsDays}
               total={quote?.total ?? null}
               canPay={canPay}
               checkForm={checkForm}
@@ -513,7 +509,7 @@ export function CheckoutClient({ viewer, addresses, collection, invoiceTermsDays
           </div>
         </aside>
       </div>
-      {(payments.stripeKey || payments.paypalClientId || viewer?.isTrade) && <MobilePayBar total={quote?.total ?? null} label={method === "invoice" ? "Place order" : "Pay"} />}
+      {(payments.stripeKey || payments.paypalClientId) && <MobilePayBar total={quote?.total ?? null} label="Pay" />}
     </div>
   );
 

@@ -23,7 +23,6 @@ export default async function AccountLayout({ children }: { children: React.Reac
         </div>
         <p className="text-sm text-ink-soft">
           {viewer.email}
-          {viewer.isTrade && <span className="ml-3 border-l border-stone-300 pl-3 text-gold-600">Trade account</span>}
         </p>
       </header>
       <div className="mt-6 grid gap-8 md:mt-12 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-14 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-20">

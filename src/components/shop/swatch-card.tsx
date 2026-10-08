@@ -18,6 +18,8 @@ export type SwatchProduct = {
   sale_mode: SaleMode;
   swatch_price_pence: number;
   image: string | null;
+  /** set when this card is one colour of a product sold in several */
+  variant?: { id: string; name: string } | null;
 };
 
 const PINKED =
@@ -26,13 +28,17 @@ const PINKED =
 /** A sample card with a pinked lower edge, like the ones pinned in the workroom. */
 export function SwatchCard({ p, index }: { p: SwatchProduct; index: number }) {
   const { items, add, hydrated } = useCart();
-  const inCart = hydrated && items.some((i) => i.productId === p.id && i.isSwatch);
+  const variantId = p.variant?.id ?? null;
+  const title = p.variant ? `${p.name}, ${p.variant.name}` : p.name;
+  const inCart = hydrated && items.some((i) => i.productId === p.id && i.isSwatch && (i.variantId ?? null) === variantId);
   const count = items.filter((i) => i.isSwatch).length;
   const full = hydrated && !inCart && count >= MAX_SWATCHES;
 
   const onAdd = () => {
     add({
       productId: p.id,
+      variantId: variantId ?? undefined,
+      variantName: p.variant?.name ?? null,
       isSwatch: true,
       quantity: 1,
       name: p.name,
@@ -42,7 +48,7 @@ export function SwatchCard({ p, index }: { p: SwatchProduct; index: number }) {
       saleMode: p.sale_mode,
       unitPricePence: p.swatch_price_pence,
     });
-    toast.success(`${p.name} swatch added`, { description: `${count + 1} of ${MAX_SWATCHES} swatches chosen` });
+    toast.success(`${title} swatch added`, { description: `${count + 1} of ${MAX_SWATCHES} swatches chosen` });
   };
 
   return (
@@ -63,9 +69,9 @@ export function SwatchCard({ p, index }: { p: SwatchProduct; index: number }) {
             <span>{p.width_cm ? `${p.width_cm}cm` : ""}</span>
           </p>
           <h3 className="font-display mt-1 text-xl leading-tight">
-            <Link href={`/product/${p.slug}`} className="hover:text-aubergine-700">{p.name}</Link>
+            <Link href={`/product/${p.slug}${variantId ? `?colour=${variantId}` : ""}`} className="hover:text-aubergine-700">{p.name}</Link>
           </h3>
-          <p className="mt-0.5 min-h-5 truncate text-sm text-ink-soft">{p.composition ?? p.subtitle}</p>
+          <p className="mt-0.5 min-h-5 truncate text-sm text-ink-soft">{p.variant ? p.variant.name : (p.composition ?? p.subtitle)}</p>
         </div>
       </div>
       </div>
@@ -73,7 +79,7 @@ export function SwatchCard({ p, index }: { p: SwatchProduct; index: number }) {
         type="button"
         onClick={onAdd}
         disabled={inCart || full}
-        aria-label={inCart ? `${p.name} swatch is in your basket` : `Add ${p.name} swatch`}
+        aria-label={inCart ? `${title} swatch is in your basket` : `Add ${title} swatch`}
         className={cn(
           "mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 border text-sm transition-colors duration-300",
           inCart

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useMemo, useState, type ReactNode } from "react";
 import { IconBolt, IconChevronDown, IconExternal, IconScissors, IconSwatch, IconTrash } from "@/components/icons";
 import { deleteProduct, saveProduct } from "@/lib/actions/admin/products";
@@ -12,8 +13,7 @@ import { ColourPicker } from "@/components/ui/colour-picker";
 import { Dropdown } from "@/components/ui/dropdown";
 import { ImageManager } from "./image-manager";
 import type { ProductForm } from "./product-form";
-
-
+import { VariantEditor } from "./variant-editor";
 
 const MODES = {
   metre: { label: "By the metre", unit: "per metre", explain: "Customers type the length they need and you cut it from the roll. Stock is counted in metres." },
@@ -52,8 +52,12 @@ export function ProductEditor({
   const mode = MODES[form.sale_mode];
   const stockUnit = form.sale_mode === "unit" ? "items" : form.sale_mode === "roll" ? "rolls" : "m";
   const costUnit = form.sale_mode === "metre" ? "metre" : form.sale_mode === "roll" ? "roll" : "unit";
+  const hasColours = form.variants.length > 0;
+  const colourStock = form.variants.filter((v) => v.is_active).reduce((n, v) => n + (Number(v.stock_qty) || 0), 0);
 
   const save = async () => {
+    const unnamed = form.variants.findIndex((v) => !v.name.trim());
+    if (unnamed >= 0) return void toast.error(`Please name colour ${unnamed + 1}.`);
     const res = await run(
       () =>
         saveProduct({
@@ -66,7 +70,6 @@ export function ProductEditor({
           category_id: form.category_id || null,
           sale_mode: form.sale_mode,
           price_pence: poundsToPence(form.price) ?? -1,
-          trade_price_pence: poundsToPence(form.trade_price),
           compare_at_pence: poundsToPence(form.compare_at),
           ...(showCost ? { cost_price_pence: poundsToPence(form.cost_price) } : {}),
           min_length_m: form.min_length_m,
@@ -79,8 +82,9 @@ export function ProductEditor({
           stock_qty: form.stock_qty || 0,
           low_stock_threshold: form.low_stock_threshold || 0,
           track_stock: form.track_stock,
-          colour: form.colour,
-          colour_hex: form.colour_hex,
+          // With colours, the first one stands in for the product's own colour (filters, placeholders).
+          colour: hasColours ? form.variants[0].name : form.colour,
+          colour_hex: hasColours ? form.variants[0].colour_hex : form.colour_hex,
           composition: form.composition,
           width_cm: form.width_cm,
           weight_gsm: form.weight_gsm,
@@ -90,7 +94,11 @@ export function ProductEditor({
           is_featured: form.is_featured,
           seo_title: form.seo_title,
           seo_description: form.seo_description,
-          images: form.images,
+          images: [
+            ...form.images.map((i) => ({ ...i, variant_id: null })),
+            ...form.variants.flatMap((v) => v.images.map((i) => ({ ...i, variant_id: v.id }))),
+          ],
+          variants: form.variants.map((v) => ({ id: v.id, name: v.name, colour_hex: v.colour_hex, stock_qty: v.stock_qty || 0, is_active: v.is_active })),
         }),
       { success: isNew ? "Product created." : "Saved." },
     );
@@ -102,8 +110,9 @@ export function ProductEditor({
 
   const preview = useMemo(() => {
     const pence = poundsToPence(form.price);
-    return { price: pence != null && pence >= 0 ? formatPence(pence) : "£0.00", img: storageUrl(form.images[0]?.storage_path) };
-  }, [form.price, form.images]);
+    const first = form.images[0] ?? form.variants.find((v) => v.images.length)?.images[0];
+    return { price: pence != null && pence >= 0 ? formatPence(pence) : "£0.00", img: storageUrl(first?.storage_path) };
+  }, [form.price, form.images, form.variants]);
 
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -131,8 +140,24 @@ export function ProductEditor({
           </Field>
         </Section>
 
-        <Section title="Photos" hint="Drag to change the order. The first one is the main photo.">
+        <Section
+          title="Photos"
+          hint={hasColours ? "Shown for every colour, after the chosen colour's own photos. Drag to change the order." : "Drag to change the order. The first one is the main photo."}
+        >
           <ImageManager productId={form.id} images={form.images} onChange={(imgs) => set("images", imgs)} productName={form.name} />
+        </Section>
+
+        <Section title="Colours" hint="One product, several colours. Shoppers choose a colour on the product page.">
+          <VariantEditor
+            productId={form.id}
+            productName={form.name}
+            variants={form.variants}
+            onChange={(v) => set("variants", v)}
+            trackStock={form.track_stock}
+            stockUnit={stockUnit}
+            lowThreshold={Number(form.low_stock_threshold) || 0}
+            seed={{ name: form.colour, hex: form.colour_hex, stock: form.stock_qty }}
+          />
         </Section>
 
         <Section title="How it's sold">
@@ -151,9 +176,6 @@ export function ProductEditor({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={`Price ${mode.unit}`} htmlFor="price" hint="Including VAT.">
               <MoneyInput id="price" value={form.price} onChange={(e) => set("price", e.target.value)} placeholder="0.00" className="text-lg" />
-            </Field>
-            <Field label={`Trade price ${mode.unit} (optional)`} htmlFor="trade" hint="What approved trade customers pay. Leave empty to use the normal price.">
-              <MoneyInput id="trade" value={form.trade_price} onChange={(e) => set("trade_price", e.target.value)} placeholder="0.00" />
             </Field>
           </div>
 
@@ -194,7 +216,21 @@ export function ProductEditor({
 
         <Section title="Stock">
           <SwitchRow checked={form.track_stock} onChange={(v) => set("track_stock", v)} title="Keep count of stock" description="Turn off for things you can always get more of. When on, it can't be sold once it runs out." />
-          {form.track_stock && (
+          {form.track_stock && hasColours && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-sm font-medium text-ink">How much you have</p>
+                <p className="mt-2 font-display text-2xl tabular-nums">
+                  {Math.round(colourStock * 100) / 100} <span className="text-base text-stone-500">{stockUnit}</span>
+                </p>
+                <p className="mt-1 text-xs text-stone-500">Set per colour in Colours. This is the total.</p>
+              </div>
+              <Field label="Warn me when a colour drops to" htmlFor="low" hint="It shows as 'Low stock' on your Today page.">
+                <UnitInput unit={stockUnit} id="low" value={form.low_stock_threshold} onChange={(e) => set("low_stock_threshold", e.target.value.replace(/[^\d.]/g, ""))} />
+              </Field>
+            </div>
+          )}
+          {form.track_stock && !hasColours && (
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="How much you have" htmlFor="stock" hint={form.sale_mode === "unit" ? "Number of items." : form.sale_mode === "roll" ? "Number of whole rolls." : "Total metres in stock."}>
                 <UnitInput unit={stockUnit} id="stock" value={form.stock_qty} onChange={(e) => set("stock_qty", e.target.value.replace(/[^\d.]/g, ""))} className="text-lg" />
@@ -216,17 +252,21 @@ export function ProductEditor({
         </Section>
 
         <Section title="Fabric details">
-          <Field label="Colour name" htmlFor="colour">
-            <Input id="colour" value={form.colour} onChange={(e) => set("colour", e.target.value)} placeholder="e.g. Ivory" className="sm:max-w-sm" />
-          </Field>
-          <Field label="Colour shade" htmlFor="hex" hint="Pick the nearest tone, or paste an exact code.">
-            <ColourPicker
-              id="hex"
-              value={form.colour_hex}
-              onChange={(hex) => set("colour_hex", hex)}
-              onPickName={(name) => !form.colour.trim() && set("colour", name)}
-            />
-          </Field>
+          {!hasColours && (
+            <>
+              <Field label="Colour name" htmlFor="colour">
+                <Input id="colour" value={form.colour} onChange={(e) => set("colour", e.target.value)} placeholder="e.g. Ivory" className="sm:max-w-sm" />
+              </Field>
+              <Field label="Colour shade" htmlFor="hex" hint="Pick the nearest tone, or paste an exact code.">
+                <ColourPicker
+                  id="hex"
+                  value={form.colour_hex}
+                  onChange={(hex) => set("colour_hex", hex)}
+                  onPickName={(name) => !form.colour.trim() && set("colour", name)}
+                />
+              </Field>
+            </>
+          )}
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Made from" htmlFor="comp">
               <Input id="comp" value={form.composition} onChange={(e) => set("composition", e.target.value)} placeholder="e.g. 100% cotton" />
@@ -322,7 +362,7 @@ export function ProductEditor({
         <div className="sticky top-8">
           <p className="mb-2 font-display text-lg italic text-stone-500">How it looks in the shop</p>
           <div className="overflow-hidden rounded-[3px] border border-ink/12 bg-cream-50">
-            <div className="relative aspect-[4/5] bg-cream-200" style={!preview.img && form.colour_hex ? { background: form.colour_hex } : undefined}>
+            <div className="relative aspect-[3/5] bg-cream-200" style={!preview.img && form.colour_hex ? { background: form.colour_hex } : undefined}>
               {preview.img ? (
                 <img src={preview.img} alt="" className="absolute inset-0 size-full object-cover" />
               ) : (
@@ -339,16 +379,27 @@ export function ProductEditor({
                 {form.compare_at && <span className="text-sm text-stone-500 line-through">{formatPence(poundsToPence(form.compare_at) ?? 0)}</span>}
               </div>
               <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-stone-500">
-                {form.colour && (
+                {hasColours ? (
                   <span className="flex items-center gap-1.5">
-                    <span className="size-3 rounded-full border border-ink/20" style={{ background: form.colour_hex || "transparent" }} />
-                    {form.colour}
+                    <span className="flex -space-x-1">
+                      {form.variants.filter((v) => v.is_active).slice(0, 6).map((v) => (
+                        <span key={v.id} className="size-3 rounded-full border border-ink/20" style={{ background: v.colour_hex || "transparent" }} />
+                      ))}
+                    </span>
+                    {form.variants.filter((v) => v.is_active).length} colours
                   </span>
+                ) : (
+                  form.colour && (
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-3 rounded-full border border-ink/20" style={{ background: form.colour_hex || "transparent" }} />
+                      {form.colour}
+                    </span>
+                  )
                 )}
                 {form.width_cm && <span>{form.width_cm}cm wide</span>}
                 {form.swatch_enabled && <span>Swatch {poundsToPence(form.swatch_price) ? formatPence(poundsToPence(form.swatch_price)!) : "free"}</span>}
               </div>
-              {form.track_stock && Number(form.stock_qty) <= 0 && <p className="mt-2 text-xs text-danger">Out of stock</p>}
+              {form.track_stock && (hasColours ? colourStock : Number(form.stock_qty)) <= 0 && <p className="mt-2 text-xs text-danger">Out of stock</p>}
             </div>
           </div>
           {!isNew && (

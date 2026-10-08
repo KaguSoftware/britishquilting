@@ -1,20 +1,19 @@
 import Link from "next/link";
-import { IconArrowRight, IconHeart, IconParcel, IconPin, IconSettings, IconSpool } from "@/components/icons";
+import { IconArrowRight, IconHeart, IconParcel, IconPin, IconSettings } from "@/components/icons";
 import { OrderLedger } from "@/components/account/order-ledger";
 import { EmptyState, SectionHead } from "@/components/account/section";
 import { ButtonLink } from "@/components/ui/button";
 import { FormMessage } from "@/components/ui/field";
-import { getMyAddresses, getMyOrders, getTradeInfo, requireViewer } from "@/lib/data/account";
+import { getMyAddresses, getMyOrders, requireViewer } from "@/lib/data/account";
 
 export const metadata = { title: "Overview" };
 
 export default async function AccountOverview({ searchParams }: PageProps<"/account">) {
   const viewer = await requireViewer("/account");
   const sp = await searchParams;
-  const [orders, addresses, trade] = await Promise.all([
+  const [orders, addresses] = await Promise.all([
     getMyOrders(viewer.id, 3),
     getMyAddresses(viewer.id),
-    getTradeInfo(viewer.id),
   ]);
   const def = addresses.find((a) => a.is_default) ?? addresses[0];
 
@@ -22,13 +21,6 @@ export default async function AccountOverview({ searchParams }: PageProps<"/acco
     { href: "/account/orders", label: "Orders", note: "History, tracking and receipts", icon: IconParcel },
     { href: "/account/addresses", label: "Addresses", note: def ? `${def.line1}, ${def.postcode}` : "Save a delivery address", icon: IconPin },
     { href: "/account/wishlist", label: "Wishlist", note: "Cloths you have saved", icon: IconHeart },
-    {
-      href: "/account/trade",
-      label: "Trade account",
-      note:
-        trade.status === "approved" ? "Trade pricing is active" : trade.status === "pending" ? "Application under review" : "Workroom pricing and invoice terms",
-      icon: IconSpool,
-    },
     { href: "/account/settings", label: "Settings", note: "Details, password, emails", icon: IconSettings },
   ];
 

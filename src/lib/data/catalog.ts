@@ -7,7 +7,6 @@ export type Viewer = {
   email: string | null;
   fullName: string | null;
   role: "customer" | "trade" | "staff" | "owner";
-  isTrade: boolean;
   isStaff: boolean;
 };
 
@@ -18,7 +17,7 @@ export async function getViewer(): Promise<Viewer | null> {
   if (!data.user) return null;
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, trade_status, email")
+    .select("full_name, role, email")
     .eq("id", data.user.id)
     .maybeSingle();
   const role = (profile?.role ?? "customer") as Viewer["role"];
@@ -27,22 +26,25 @@ export async function getViewer(): Promise<Viewer | null> {
     email: data.user.email ?? profile?.email ?? null,
     fullName: profile?.full_name ?? (data.user.user_metadata?.full_name as string | undefined) ?? null,
     role,
-    isTrade: profile?.trade_status === "approved",
     isStaff: role === "staff" || role === "owner",
   };
 }
 
 const PRICED_COLUMNS =
-  "id, name, sale_mode, price_pence, trade_price_pence, min_length_m, length_step_m, max_length_m, weight_g_per_unit, swatch_enabled, swatch_price_pence, stock_qty, track_stock, is_active";
+  "id, name, sale_mode, price_pence, min_length_m, length_step_m, max_length_m, weight_g_per_unit, swatch_enabled, swatch_price_pence, stock_qty, track_stock, is_active, product_variants(id, name, stock_qty, is_active, sort_order)";
 
-/** Fresh pricing rows for the given products. Service role: includes trade prices, never sent raw to the client. */
+/** Fresh pricing rows for the given products. Service role: never sent raw to the client. */
 export async function getPricedProducts(ids: string[]): Promise<PricedProduct[]> {
   if (ids.length === 0) return [];
   const db = createAdminClient();
   const { data, error } = await db.from("products").select(PRICED_COLUMNS).in("id", ids).eq("is_active", true);
   if (error) throw error;
-  return (data ?? []).map((p) => ({
+  return (data ?? []).map(({ product_variants, ...p }) => ({
     ...p,
+    variants: ((product_variants ?? []) as { id: string; name: string; stock_qty: number; is_active: boolean; sort_order: number }[])
+      .filter((v) => v.is_active)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((v) => ({ id: v.id, name: v.name, stock_qty: Number(v.stock_qty) })),
     min_length_m: p.min_length_m == null ? null : Number(p.min_length_m),
     length_step_m: p.length_step_m == null ? null : Number(p.length_step_m),
     max_length_m: p.max_length_m == null ? null : Number(p.max_length_m),

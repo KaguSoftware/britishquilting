@@ -35,7 +35,7 @@ export function stableStringify(value: unknown): string {
     .join(",")}}`;
 }
 
-type HashLine = { productId: string; lengthM?: number; quantity: number; isSwatch?: boolean };
+type HashLine = { productId: string; variantId?: string; lengthM?: number; quantity: number; isSwatch?: boolean };
 
 /** Canonical cart fingerprint, independent of line order. Hash it server side. */
 export function cartFingerprint(input: {
@@ -48,7 +48,7 @@ export function cartFingerprint(input: {
   total: number;
 }) {
   const lines = input.lines
-    .map((l) => ({ p: l.productId, l: l.lengthM ?? null, q: l.quantity, s: Boolean(l.isSwatch) }))
+    .map((l) => ({ p: l.productId, v: l.variantId ?? null, l: l.lengthM ?? null, q: l.quantity, s: Boolean(l.isSwatch) }))
     .sort((a, b) => stableStringify(a).localeCompare(stableStringify(b)));
   return stableStringify({
     lines,

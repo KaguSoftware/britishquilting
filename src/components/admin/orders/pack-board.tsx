@@ -19,7 +19,6 @@ export type BoardOrder = {
   shipping_name: string | null;
   shipping_address: { full_name?: string } | null;
   customer_note: string | null;
-  is_trade: boolean;
   order_items: { name: string; length_m: number | null; quantity: number; sale_mode: string; is_swatch: boolean }[];
 };
 

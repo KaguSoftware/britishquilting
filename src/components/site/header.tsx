@@ -10,12 +10,12 @@ import { useCart } from "@/components/cart/cart-store";
 import { cn } from "@/lib/utils";
 
 const NAV = [
+  { href: "/shop/fabrics-and-ties", label: "Fabrics & Ties" },
   { href: "/shop/linings", label: "Linings" },
-  { href: "/shop/interlinings", label: "Interlinings" },
-  { href: "/shop/paper", label: "Paper" },
-  { href: "/samples", label: "Samples" },
-  { href: "/journal", label: "Journal" },
-  { href: "/trade", label: "Trade" },
+  { href: "/shop/trimmings", label: "Trimmings" },
+  { href: "/shop/accessories", label: "Accessories" },
+  { href: "/samples", label: "Shade Cards" },
+  { href: "/shop/special-offers", label: "Special Offers" },
 ];
 
 export function Header() {

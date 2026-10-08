@@ -31,7 +31,7 @@ export const CATEGORY_COPY: Record<string, { eyebrow: string; title: string; led
   paper: {
     eyebrow: "Workroom paper",
     title: "Pattern, tracing and tissue",
-    lede: "The papers our trade customers rely on for drafting, templating and wrapping finished work. Sold by the roll and pack.",
+    lede: "The papers our workroom customers rely on for drafting, templating and wrapping finished work. Sold by the roll and pack.",
     note: "Acid-free tissue keeps stored textiles safe from yellowing.",
   },
 };
@@ -123,10 +123,10 @@ export function ShopListing({
 
           <FilterPendingOverlay>
             {results.length > 0 ? (
-              <ul className="mt-10 grid grid-cols-2 gap-x-4 gap-y-12 md:mt-14 md:grid-cols-3 md:gap-x-6 lg:grid-cols-4">
+              <ul className="mt-10 grid grid-cols-2 gap-x-4 gap-y-12 md:mt-14 md:grid-cols-4 md:gap-x-5 lg:grid-cols-5">
                 {results.map((p, i) => (
-                  <Reveal as="li" key={p.id} delay={(i % 4) * 0.06}>
-                    <ProductCard p={p} sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw" />
+                  <Reveal as="li" key={p.id} delay={(i % 5) * 0.06}>
+                    <ProductCard p={p} />
                   </Reveal>
                 ))}
               </ul>

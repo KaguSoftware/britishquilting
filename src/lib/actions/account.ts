@@ -178,58 +178,6 @@ export async function removeFromWishlist(productId: string): Promise<FormState> 
   return { ok: true, message: "Removed from your wishlist." };
 }
 
-/* ─────────────── Trade application */
-export async function applyForTrade(_: FormState, form: FormData): Promise<FormState> {
-  const { supabase, user } = await authed();
-  if (!user) return signedOut;
-
-  const { data: profile } = await supabase.from("profiles").select("trade_status").eq("id", user.id).maybeSingle();
-  if (profile?.trade_status === "approved") return { message: "Your trade account is already active." };
-  const { data: open } = await supabase.from("trade_applications").select("id").eq("user_id", user.id).eq("status", "pending").limit(1);
-  if (profile?.trade_status === "pending" || (open?.length ?? 0) > 0) return { message: "Your application is already with us. We'll be in touch shortly." };
-
-  const parsed = z
-    .object({
-      company_name: z.string().min(2, "Please enter your company or trading name.").max(160),
-      business_type: z.string().min(1, "Please choose the option closest to your business.").max(60),
-      vat_number: z
-        .string()
-        .max(20)
-        .refine((s) => s === "" || /^(GB)?\s?\d{3}\s?\d{4}\s?\d{2}(\s?\d{3})?$/i.test(s), "That doesn't look like a UK VAT number, for example GB 123 4567 89.")
-        .transform((s) => (s === "" ? null : s.toUpperCase().replace(/\s+/g, ""))),
-      company_number: z
-        .string()
-        .max(10)
-        .refine((s) => s === "" || /^([A-Z]{2}\d{6}|\d{8})$/i.test(s.replace(/\s+/g, "")), "Company numbers are 8 characters, for example 01234567.")
-        .transform((s) => (s === "" ? null : s.toUpperCase().replace(/\s+/g, ""))),
-      website: z
-        .string()
-        .max(200)
-        .transform((s) => (s === "" ? null : /^https?:\/\//i.test(s) ? s : `https://${s}`))
-        .refine((s) => s === null || z.url().safeParse(s).success, "Please enter a valid website address."),
-      message: optional(2000),
-    })
-    .safeParse({
-      company_name: str(form, "company_name"),
-      business_type: str(form, "business_type"),
-      vat_number: str(form, "vat_number"),
-      company_number: str(form, "company_number"),
-      website: str(form, "website"),
-      message: str(form, "message"),
-    });
-  if (!parsed.success) return { fieldErrors: z.flattenError(parsed.error).fieldErrors };
-
-  const { error } = await supabase.from("trade_applications").insert({ ...parsed.data, user_id: user.id });
-  if (error) return { message: "We couldn't send your application. Please try again." };
-  // trade_status is trigger-guarded (staff only); the pending state is read from trade_applications instead.
-  await supabase
-    .from("profiles")
-    .update({ company_name: parsed.data.company_name, vat_number: parsed.data.vat_number })
-    .eq("id", user.id);
-  revalidatePath("/account", "layout");
-  return { ok: true, message: "Application received. We review every account personally, usually within one working day." };
-}
-
 export async function toggleWishlist(productId: string, save: boolean): Promise<{ ok?: boolean; message?: string; saved?: boolean }> {
   const { supabase, user } = await authed();
   if (!user) return { ok: false, message: "Please sign in to save items." };

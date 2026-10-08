@@ -16,7 +16,7 @@ export function UnpaidInvoices({ invoices }: { invoices: UnpaidInvoice[] }) {
   const total = invoices.reduce((a, i) => a + i.total_pence, 0);
   const overdue = invoices.filter((i) => i.overdue);
 
-  if (!invoices.length) return <p className="py-4 text-sm text-ink-soft">Every trade invoice has been paid. Nothing owed to you.</p>;
+  if (!invoices.length) return <p className="py-4 text-sm text-ink-soft">Every invoice has been paid. Nothing owed to you.</p>;
 
   const pay = async (inv: UnpaidInvoice) => {
     const yes = await confirm({

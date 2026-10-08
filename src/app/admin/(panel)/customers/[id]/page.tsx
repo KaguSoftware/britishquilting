@@ -12,11 +12,10 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { db } = await staffDb();
-  const [{ data: p }, { data: orders }, { data: addresses }, { data: apps }, { data: reviews }] = await Promise.all([
+  const [{ data: p }, { data: orders }, { data: addresses }, { data: reviews }] = await Promise.all([
     db.from("profiles").select("*").eq("id", id).maybeSingle(),
     db.from("orders").select("id, number, status, total_pence, created_at").eq("user_id", id).order("created_at", { ascending: false }),
     db.from("addresses").select("*").eq("user_id", id).order("is_default", { ascending: false }),
-    db.from("trade_applications").select("id, status, company_name, created_at").eq("user_id", id).order("created_at", { ascending: false }),
     db.from("reviews").select("id, rating, title, status, created_at").eq("user_id", id).order("created_at", { ascending: false }),
   ]);
   if (!p) notFound();
@@ -31,8 +30,6 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         description={
           <span className="flex flex-wrap items-center gap-2">
             {p.company_name && <span>{p.company_name}</span>}
-            {p.trade_status === "approved" && <Badge tone="gold">Trade customer</Badge>}
-            {p.trade_status === "pending" && <Badge tone="neutral">Trade application waiting</Badge>}
             {(p.role === "staff" || p.role === "owner") && <Badge tone="aubergine">{p.role === "owner" ? "Owner" : "Staff"}</Badge>}
             <span>Customer since {formatDate(p.created_at)}</span>
           </span>
@@ -103,23 +100,6 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
                         {l}
                       </span>
                     ))}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          {(apps ?? []).length > 0 && (
-            <Card title="Trade applications">
-              <ul className="space-y-2 text-sm">
-                {apps!.map((a) => (
-                  <li key={a.id} className="flex items-center justify-between gap-2">
-                    <span>
-                      {a.company_name} <span className="text-stone-500">· {formatDate(a.created_at)}</span>
-                    </span>
-                    <Link href={`/admin/trade?show=${a.status}`}>
-                      <Badge tone={a.status === "approved" ? "green" : a.status === "rejected" ? "red" : "gold"}>{a.status === "pending" ? "Waiting" : a.status === "approved" ? "Approved" : "Declined"}</Badge>
-                    </Link>
                   </li>
                 ))}
               </ul>

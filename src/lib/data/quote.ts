@@ -6,6 +6,7 @@ import { findDiscount, getPricedProducts, getShippingRates, getStoreSettings, ge
 
 const lineSchema = z.object({
   productId: z.uuid(),
+  variantId: z.uuid().optional(),
   lengthM: z.number().positive().max(1000).optional(),
   quantity: z.number().int().min(1).max(999),
   isSwatch: z.boolean().optional(),
@@ -34,7 +35,6 @@ export async function computeQuote(raw: QuoteInput) {
   const q = quote({
     lines: input.lines as CartLine[],
     products,
-    trade: Boolean(viewer?.isTrade),
     rates,
     rateId: input.rateId,
     fulfilment: input.fulfilment,

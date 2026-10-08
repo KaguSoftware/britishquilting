@@ -63,6 +63,10 @@ describe("fingerprint", () => {
     expect(cartFingerprint({ ...base, lines: [{ productId: "x", quantity: 2 }] })).not.toBe(a);
     expect(cartFingerprint({ ...base, lines, rateId: "r2" })).not.toBe(a);
   });
+  it("changes with colour", () => {
+    const a = cartFingerprint({ ...base, lines: [{ productId: "x", variantId: "ivory", quantity: 1 }] });
+    expect(cartFingerprint({ ...base, lines: [{ productId: "x", variantId: "white", quantity: 1 }] })).not.toBe(a);
+  });
   it("ignores rate for collection", () => {
     const lines = [{ productId: "x", quantity: 1 }];
     expect(cartFingerprint({ ...base, fulfilment: "collection", lines })).toBe(cartFingerprint({ ...base, fulfilment: "collection", rateId: "zz", lines }));

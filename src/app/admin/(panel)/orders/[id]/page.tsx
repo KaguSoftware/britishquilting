@@ -168,7 +168,6 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               </a>
             )}
             <div className="mt-2 flex flex-wrap gap-2">
-              {order.is_trade && <Badge tone="gold">Trade customer</Badge>}
               {profile ? (
                 <Link href={`/admin/customers/${profile.id}`} className="text-sm text-aubergine-700 hover:underline">
                   See all their orders
@@ -224,7 +223,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
 
           <Card title="Payment">
             <dl className="space-y-1.5 text-sm">
-              <Row label="Paid by" value={order.payment_provider === "invoice" ? "Invoice (trade account)" : order.payment_provider === "paypal" ? "PayPal" : order.payment_provider === "stripe" ? "Card" : "Not paid"} />
+              <Row label="Paid by" value={order.payment_provider === "invoice" ? "Invoice" : order.payment_provider === "paypal" ? "PayPal" : order.payment_provider === "stripe" ? "Card" : "Not paid"} />
               <Row label="Paid" value={order.paid_at ? formatDateTime(order.paid_at) : "Not yet"} />
               {order.invoice_due_at && !order.paid_at && <Row label="Invoice due" value={formatDateTime(order.invoice_due_at)} />}
               {order.payment_ref && <Row label="Reference" value={<span className="break-all font-mono text-xs">{order.payment_ref}</span>} />}

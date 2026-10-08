@@ -68,30 +68,6 @@ export async function getMyAddresses(userId: string): Promise<Address[]> {
   return data ?? [];
 }
 
-export type TradeInfo = {
-  status: "none" | "pending" | "approved" | "rejected";
-  application: { company_name: string; created_at: string; status: string; reviewed_at: string | null } | null;
-};
-
-export async function getTradeInfo(userId: string): Promise<TradeInfo> {
-  const supabase = await createClient();
-  const [{ data: profile }, { data: apps }] = await Promise.all([
-    supabase.from("profiles").select("trade_status").eq("id", userId).maybeSingle(),
-    supabase
-      .from("trade_applications")
-      .select("company_name, created_at, status, reviewed_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(1),
-  ]);
-  const application = apps?.[0] ?? null;
-  let status = (profile?.trade_status ?? "none") as TradeInfo["status"];
-  // trade_status only changes when staff review, so a fresh application shows as pending here.
-  if (status === "none" && application?.status === "pending") status = "pending";
-  if (status === "rejected" && application?.status === "pending") status = "pending";
-  return { status, application };
-}
-
 const dateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" });
 const shortFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
 const timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });

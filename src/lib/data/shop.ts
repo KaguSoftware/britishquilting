@@ -9,6 +9,25 @@ const REVALIDATE_SECONDS = 300;
 
 export type Category = { id: string; slug: string; name: string; description: string | null };
 
+/** A colour as the shop sees it: whether it can be bought, never the raw stock figure. */
+export type PublicVariant = { id: string; name: string; colour_hex: string | null; in_stock: boolean; low_stock: boolean };
+
+type VariantRow = { id: string; name: string; colour_hex: string | null; stock_qty: number; sort_order: number };
+
+const VARIANT_COLUMNS = "product_variants(id, name, colour_hex, stock_qty, sort_order)";
+
+/** Variants in shop order with stock reduced to in/low flags, using the product's tracking and threshold. */
+function publicVariants(rows: VariantRow[] | null | undefined, p: { track_stock?: boolean; low_stock_threshold?: number | null }): PublicVariant[] {
+  const track = p.track_stock ?? true;
+  const low = Number(p.low_stock_threshold ?? 0);
+  return [...(rows ?? [])]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((v) => {
+      const qty = Number(v.stock_qty);
+      return { id: v.id, name: v.name, colour_hex: v.colour_hex, in_stock: !track || qty > 0, low_stock: track && qty > 0 && qty <= low };
+    });
+}
+
 export type ProductDetail = ProductCardData & {
   description: string | null;
   category_id: string | null;
@@ -29,6 +48,7 @@ export type ProductDetail = ProductCardData & {
   created_at: string;
   is_featured: boolean;
   sort_order: number;
+  variants: PublicVariant[];
 };
 
 export type Review = {
@@ -52,7 +72,7 @@ export type Post = {
 };
 
 const LIST_COLUMNS =
-  "id, slug, name, subtitle, category_id, sale_mode, price_pence, compare_at_pence, in_stock, low_stock, colour, colour_hex, composition, width_cm, swatch_enabled, swatch_price_pence, is_featured, sort_order, created_at, rating_avg, rating_count, product_images(storage_path, alt, sort_order)";
+  "id, slug, name, subtitle, category_id, sale_mode, price_pence, compare_at_pence, in_stock, low_stock, colour, colour_hex, composition, width_cm, swatch_enabled, swatch_price_pence, is_featured, sort_order, created_at, rating_avg, rating_count, product_images(storage_path, alt, sort_order, variant_id)";
 
 export type ListProduct = ProductCardData & {
   category_id: string | null;
@@ -68,7 +88,7 @@ export type ListProduct = ProductCardData & {
 
 /**
  * These public catalog/content reads never see a signed-in viewer or per-viewer data
- * (trade pricing, reviews, wishlist state), so they're safe to cache across requests.
+ * (reviews, wishlist state), so they're safe to cache across requests.
  * They use createPublicClient() (no cookies()/headers()) because unstable_cache forbids
  * Request-time APIs inside its scope, and are tagged so admin edits (see revalidateTag
  * calls next to revalidatePath in the admin actions) can invalidate them immediately.
@@ -94,9 +114,16 @@ export const getListProducts = cache(
   unstable_cache(
     async (): Promise<ListProduct[]> => {
       const supabase = createPublicClient();
-      const { data, error } = await supabase.from("products_public").select(LIST_COLUMNS).order("sort_order");
+      const [{ data, error }, { data: colours, error: coloursError }] = await Promise.all([
+        supabase.from("products_public").select(LIST_COLUMNS).order("sort_order"),
+        supabase.from("products").select(`id, track_stock, low_stock_threshold, ${VARIANT_COLUMNS}`).eq("is_active", true),
+      ]);
       if (error) throw error;
-      return (data ?? []) as unknown as ListProduct[];
+      if (coloursError) throw coloursError;
+      const byId = new Map(
+        (colours ?? []).map((c) => [c.id as string, publicVariants(c.product_variants as VariantRow[], c)]),
+      );
+      return ((data ?? []) as unknown as ListProduct[]).map((p) => ({ ...p, variants: byId.get(p.id) ?? [] }));
     },
     ["list-products"],
     { tags: ["products"], revalidate: REVALIDATE_SECONDS },
@@ -111,10 +138,15 @@ export const getProduct = cache(async (slug: string): Promise<ProductDetail | nu
       const supabase = createPublicClient();
       const { data } = await supabase
         .from("products_public")
-        .select("*, product_images(storage_path, alt, sort_order)")
+        .select("*, product_images(storage_path, alt, sort_order, variant_id)")
         .eq("slug", slug)
         .maybeSingle();
       if (!data) return null;
+      const { data: stock } = await supabase
+        .from("products")
+        .select(`track_stock, low_stock_threshold, ${VARIANT_COLUMNS}`)
+        .eq("id", data.id)
+        .maybeSingle();
       return {
         ...data,
         min_length_m: num(data.min_length_m),
@@ -123,19 +155,13 @@ export const getProduct = cache(async (slug: string): Promise<ProductDetail | nu
         roll_length_m: num(data.roll_length_m),
         rating_avg: Number(data.rating_avg ?? 0),
         tags: data.tags ?? [],
+        variants: stock ? publicVariants(stock.product_variants as VariantRow[], stock) : [],
       } as ProductDetail;
     },
     ["product", slug],
     { tags: ["products", `product:${slug}`], revalidate: REVALIDATE_SECONDS },
   )();
 });
-
-/** Trade price for an approved trade viewer only. Service role, server-side. */
-export async function getTradePrice(productId: string) {
-  const db = createAdminClient();
-  const { data } = await db.from("products").select("trade_price_pence").eq("id", productId).maybeSingle();
-  return (data?.trade_price_pence as number | null) ?? null;
-}
 
 export async function getReviews(productId: string): Promise<Review[]> {
   const supabase = await createClient();
@@ -228,9 +254,8 @@ export function buildFacets(products: ListProduct[]): Facets {
   const comps = new Map<string, number>();
   const widths = new Map<string, number>();
   for (const p of products) {
-    if (p.colour_hex) {
-      const hex = p.colour_hex.toLowerCase();
-      const e = colours.get(hex) ?? { hex, name: p.colour ?? p.colour_hex, count: 0 };
+    for (const { hex, name } of productColours(p)) {
+      const e = colours.get(hex) ?? { hex, name, count: 0 };
       e.count++;
       colours.set(hex, e);
     }
@@ -244,6 +269,16 @@ export function buildFacets(products: ListProduct[]): Facets {
   };
 }
 
+/** Every colour a product comes in: its colour range, or its single colour. */
+function productColours(p: ListProduct) {
+  const list = p.variants?.length
+    ? p.variants.filter((v) => v.colour_hex).map((v) => ({ hex: v.colour_hex!.toLowerCase(), name: v.name }))
+    : p.colour_hex
+      ? [{ hex: p.colour_hex.toLowerCase(), name: p.colour ?? p.colour_hex }]
+      : [];
+  return [...new Map(list.map((c) => [c.hex, c])).values()];
+}
+
 function luminance(hex: string) {
   const n = parseInt(hex.replace("#", ""), 16);
   return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
@@ -252,7 +287,7 @@ function luminance(hex: string) {
 export function applyFilters(products: ListProduct[], f: ShopFilters) {
   const out = products.filter(
     (p) =>
-      (!f.colour.length || (p.colour_hex && f.colour.includes(p.colour_hex.toLowerCase()))) &&
+      (!f.colour.length || productColours(p).some((c) => f.colour.includes(c.hex))) &&
       (!f.composition.length || (p.composition && f.composition.includes(p.composition))) &&
       (!f.width.length || (p.width_cm && f.width.includes(String(p.width_cm)))) &&
       (!f.inStock || p.in_stock),

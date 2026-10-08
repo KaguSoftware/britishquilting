@@ -26,7 +26,7 @@ const getHomeData = unstable_cache(
           .select("id, slug, name, subtitle, sale_mode, price_pence, compare_at_pence, in_stock, low_stock, colour_hex, rating_avg, rating_count, product_images(storage_path, alt, sort_order)")
           .eq("is_featured", true)
           .order("sort_order")
-          .limit(4),
+          .limit(5),
       ]);
       return {
         categories: cats?.length ? cats.map((c) => ({ slug: c.slug, name: c.name, blurb: c.description ?? "" })) : FALLBACK,
@@ -78,9 +78,9 @@ export default async function HomePage() {
               View all <ArrowRight className="size-4" />
             </Link>
           </Reveal>
-          <div className="mt-12 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-x-6">
+          <div className="mt-12 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-x-5 lg:grid-cols-5">
             {featured.map((p, i) => (
-              <Reveal key={p.id} delay={i * 0.08}>
+              <Reveal key={p.id} delay={i * 0.08} className={i === 4 ? "hidden lg:block" : undefined}>
                 <ProductCard p={p} />
               </Reveal>
             ))}
@@ -132,18 +132,9 @@ export default async function HomePage() {
         </ol>
       </section>
 
-      {/* Trade + samples */}
-      <section className="mx-auto grid max-w-7xl gap-4 px-4 pb-24 md:grid-cols-2 md:px-8 md:pb-32">
+      {/* Samples */}
+      <section className="mx-auto grid max-w-7xl gap-4 px-4 pb-24 md:px-8 md:pb-32">
         <Reveal>
-          <Link href="/trade" className="group relative flex min-h-96 flex-col justify-end overflow-hidden bg-aubergine-800 p-10 text-cream-50">
-            <div aria-hidden className="absolute inset-0 bg-[radial-gradient(80%_70%_at_80%_10%,rgb(201_164_92/.25),transparent_60%)] transition-transform duration-1000 ease-(--ease-silk) group-hover:scale-110" />
-            <p className="eyebrow relative text-gold-300">Trade accounts</p>
-            <h3 className="font-display relative mt-3 text-5xl">Workroom pricing, on account.</h3>
-            <p className="relative mt-3 max-w-md text-cream-100/75">Trade prices, full rolls and 30-day invoice terms for curtain makers, upholsterers and interior designers.</p>
-            <span className="relative mt-6 inline-flex items-center gap-2 text-gold-300">Apply in two minutes <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" /></span>
-          </Link>
-        </Reveal>
-        <Reveal delay={0.1}>
           <Link href="/samples" className="group relative flex min-h-96 flex-col justify-end overflow-hidden border border-stone-300 bg-cream-50 p-10">
             <p className="eyebrow text-gold-600">Swatches</p>
             <h3 className="font-display mt-3 text-5xl">Feel it before you cut it.</h3>

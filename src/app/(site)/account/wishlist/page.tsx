@@ -39,7 +39,7 @@ export default async function WishlistPage() {
       </SectionHead>
       {products.length ? (
         <>
-          <ul className="grid grid-cols-2 gap-x-4 gap-y-12 lg:grid-cols-3 lg:gap-x-6">
+          <ul className="grid grid-cols-2 gap-x-4 gap-y-12 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-5">
             {products.map((p) => (
               <li key={p.id} className="relative">
                 <WishlistRemove productId={p.id} name={p.name} />

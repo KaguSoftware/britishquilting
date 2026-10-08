@@ -7,14 +7,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   IconBolt, IconChart, IconChevronLeft, IconChevronRight, IconClock, IconClose, IconCrown, IconExternal, IconHome, IconLock, IconLogout,
-  IconMail, IconMenu, IconParcel, IconPencil, IconSearch, IconSettings, IconStar, IconSwatch, IconTag, IconTape, IconUsers, IconVan,
+  IconMail, IconMenu, IconParcel, IconPencil, IconSearch, IconSettings, IconStar, IconSwatch, IconTag, IconUsers, IconVan,
 } from "@/components/icons";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "./command-palette";
 import { ConfirmProvider } from "./controls";
 
-export type NavCounts = { toPack: number; trade: number; reviews: number };
+export type NavCounts = { toPack: number; reviews: number };
 
 type NavItem = { href: string; label: string; icon: typeof IconHome; count?: keyof NavCounts; owner?: boolean };
 
@@ -39,7 +39,6 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     group: "People",
     items: [
       { href: "/admin/customers", label: "Customers", icon: IconUsers },
-      { href: "/admin/trade", label: "Trade applications", icon: IconTape, count: "trade" },
       { href: "/admin/reviews", label: "Reviews", icon: IconStar, count: "reviews" },
     ],
   },

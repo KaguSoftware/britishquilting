@@ -4,21 +4,22 @@ import { notFound } from "next/navigation";
 import {IconArrowRight, IconCheck, IconSwatch, IconScissors, IconVan} from "@/components/icons";
 import { Reveal } from "@/components/site/reveal";
 import { ProductCard } from "@/components/shop/product-card";
-import { ProductGallery } from "@/components/shop/product-gallery";
+import { ColourGallery, ColourProvider } from "@/components/shop/colour-choice";
+import { photosFor } from "@/lib/photos";
 import { PurchasePanel } from "@/components/shop/purchase-panel";
 import { RecentlyViewedRail, RecordRecentlyViewed } from "@/components/shop/recently-viewed";
 import { ReviewForm } from "@/components/shop/review-form";
 import { WishlistToggle } from "@/components/shop/wishlist-toggle";
 import { Accordion, Breadcrumbs, Stars } from "@/components/shop/bits";
 import { getViewer } from "@/lib/data/catalog";
-import { getCategories, getListProducts, getOwnReview, getProduct, getReviews, getTradePrice, isWishlisted } from "@/lib/data/shop";
+import { getCategories, getListProducts, getOwnReview, getProduct, getReviews, isWishlisted } from "@/lib/data/shop";
 import { formatMetres, siteUrl, storageUrl } from "@/lib/utils";
 
 export async function generateMetadata({ params }: PageProps<"/product/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   const p = await getProduct(slug);
   if (!p) return { title: "Fabric not found" };
-  const img = [...(p.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order)[0];
+  const img = photosFor(p.product_images ?? [], p.variants[0]?.id ?? null)[0];
   const description = p.seo_description ?? p.subtitle ?? p.description?.slice(0, 160) ?? undefined;
   return {
     title: p.seo_title ?? p.name,
@@ -28,23 +29,27 @@ export async function generateMetadata({ params }: PageProps<"/product/[slug]">)
   };
 }
 
-export default async function ProductPage({ params }: PageProps<"/product/[slug]">) {
+export default async function ProductPage({ params, searchParams }: PageProps<"/product/[slug]">) {
   const { slug } = await params;
+  const { colour: wanted } = await searchParams;
   const p = await getProduct(slug);
   if (!p) notFound();
 
   const [viewer, reviews, categories, all] = await Promise.all([getViewer().catch(() => null), getReviews(p.id), getCategories(), getListProducts()]);
-  const [tradePrice, ownReview, saved] = await Promise.all([
-    viewer?.isTrade ? getTradePrice(p.id) : Promise.resolve(null),
+  const [ownReview, saved] = await Promise.all([
     viewer ? getOwnReview(p.id, viewer.id) : Promise.resolve(null),
     viewer ? isWishlisted(p.id, viewer.id) : Promise.resolve(null),
   ]);
   const category = categories.find((c) => c.id === p.category_id) ?? null;
   const images = [...(p.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+  // Open on the colour in the link, else the first one in stock.
+  const initialColour =
+    p.variants.find((v) => v.id === wanted)?.id ?? p.variants.find((v) => v.in_stock)?.id ?? p.variants[0]?.id ?? null;
+  const colourNames = p.variants.length ? p.variants.map((v) => v.name).join(", ") : p.colour;
   const related = all
     .filter((x) => x.id !== p.id)
     .sort((a, b) => Number(b.category_id === p.category_id) - Number(a.category_id === p.category_id) || a.sort_order - b.sort_order)
-    .slice(0, 4);
+    .slice(0, 5);
   const isMetre = p.sale_mode === "metre";
 
   const jsonLd = {
@@ -56,7 +61,7 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
     url: `${siteUrl}/product/${p.slug}`,
     image: images.map((i) => storageUrl(i.storage_path)),
     brand: { "@type": "Brand", name: "British Quilting" },
-    color: p.colour ?? undefined,
+    color: colourNames ?? undefined,
     material: p.composition ?? undefined,
     category: category?.name,
     offers: {
@@ -104,7 +109,7 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
     ["Composition", p.composition],
     ["Width", p.width_cm ? `${p.width_cm}cm` : null],
     ["Weight", p.weight_gsm ? `${p.weight_gsm} gsm` : null],
-    ["Colour", p.colour],
+    [p.variants.length > 1 ? "Colours" : "Colour", colourNames],
     ["Sold", isMetre ? `By the metre, from ${formatMetres(p.min_length_m ?? 0.5)}` : p.sale_mode === "roll" ? `Full roll${p.roll_length_m ? ` of ${formatMetres(p.roll_length_m)}` : ""}` : "Each"],
   ];
 
@@ -120,8 +125,13 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
         />
       </div>
 
+      <ColourProvider colours={p.variants} initialId={initialColour} images={images}>
       <section className="mx-auto grid max-w-7xl gap-10 px-4 pb-20 pt-8 md:grid-cols-[1.1fr_1fr] md:gap-14 md:px-8 lg:gap-20">
-        <ProductGallery images={images} hex={p.colour_hex} name={p.name} label={[p.colour, p.composition, p.width_cm ? `${p.width_cm}cm wide` : null].filter(Boolean).join(" / ") || null} />
+        <ColourGallery
+          hex={p.colour_hex}
+          name={p.name}
+          label={[p.variants.length ? null : p.colour, p.composition, p.width_cm ? `${p.width_cm}cm wide` : null].filter(Boolean).join(" / ") || null}
+        />
 
         <div>
           <Reveal>
@@ -146,7 +156,6 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
               saleMode: p.sale_mode,
               pricePence: p.price_pence,
               comparePence: p.compare_at_pence,
-              tradePricePence: tradePrice,
               minLength: p.min_length_m ?? 0.5,
               step: p.length_step_m ?? 0.5,
               maxLength: p.max_length_m,
@@ -162,12 +171,6 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
           <div className="mt-4">
             <WishlistToggle productId={p.id} saved={saved} next={`/product/${p.slug}`} />
           </div>
-
-          {viewer && !viewer.isTrade && (
-            <p className="mt-5 text-sm text-ink-soft">
-              Buying for a workroom? <Link href="/trade" className="text-aubergine-700 underline underline-offset-4">Trade prices are available</Link>.
-            </p>
-          )}
 
           <ul className="mt-10 grid grid-cols-3 gap-3 text-center text-xs text-ink-soft">
             {[
@@ -219,6 +222,7 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
           </div>
         </div>
       </section>
+      </ColourProvider>
 
       {/* Reviews */}
       <section id="reviews" className="scroll-mt-24 border-t border-stone-300 bg-cream-50">
@@ -293,9 +297,9 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
               View all <IconArrowRight className="size-4" />
             </Link>
           </Reveal>
-          <ul className="mt-12 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-x-6">
+          <ul className="mt-12 grid grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-x-5 lg:grid-cols-5">
             {related.map((r, i) => (
-              <Reveal as="li" key={r.id} delay={i * 0.06}>
+              <Reveal as="li" key={r.id} delay={i * 0.06} className={i === 4 ? "hidden lg:block" : undefined}>
                 <ProductCard p={r} />
               </Reveal>
             ))}

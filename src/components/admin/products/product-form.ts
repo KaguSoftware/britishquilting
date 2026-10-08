@@ -1,6 +1,16 @@
 import { penceToPounds } from "../format";
 import type { EditorImage } from "./image-manager";
 
+export type EditorVariant = {
+  id: string;
+  name: string;
+  colour_hex: string;
+  stock_qty: string;
+  is_active: boolean;
+  /** this colour's own photos, in order */
+  images: EditorImage[];
+};
+
 export type ProductForm = {
   id: string;
   name: string;
@@ -11,7 +21,6 @@ export type ProductForm = {
   category_id: string;
   sale_mode: "metre" | "roll" | "unit";
   price: string;
-  trade_price: string;
   compare_at: string;
   cost_price: string;
   min_length_m: string;
@@ -35,10 +44,16 @@ export type ProductForm = {
   is_featured: boolean;
   seo_title: string;
   seo_description: string;
+  /** photos shared by every colour (or all photos, for a product without colours) */
   images: EditorImage[];
+  variants: EditorVariant[];
 };
 
-export function toForm(p: Record<string, unknown> | null, images: EditorImage[], id: string): ProductForm {
+export type VariantRow = { id: string; name: string; colour_hex: string | null; stock_qty: number | string; is_active: boolean };
+
+export const newVariant = (name = ""): EditorVariant => ({ id: crypto.randomUUID(), name, colour_hex: "", stock_qty: "0", is_active: true, images: [] });
+
+export function toForm(p: Record<string, unknown> | null, images: EditorImage[], id: string, variants: VariantRow[] = []): ProductForm {
   const s = (v: unknown) => (v == null ? "" : String(v));
   const n = (v: unknown) => (v == null ? "" : String(Number(v)));
   return {
@@ -51,7 +66,6 @@ export function toForm(p: Record<string, unknown> | null, images: EditorImage[],
     category_id: s(p?.category_id),
     sale_mode: ((p?.sale_mode as string) ?? "metre") as ProductForm["sale_mode"],
     price: penceToPounds(p?.price_pence as number | null),
-    trade_price: penceToPounds(p?.trade_price_pence as number | null),
     compare_at: penceToPounds(p?.compare_at_pence as number | null),
     cost_price: penceToPounds(p?.cost_price_pence as number | null),
     min_length_m: p ? n(p.min_length_m) : "0.5",
@@ -75,6 +89,14 @@ export function toForm(p: Record<string, unknown> | null, images: EditorImage[],
     is_featured: p ? Boolean(p.is_featured) : false,
     seo_title: s(p?.seo_title),
     seo_description: s(p?.seo_description),
-    images,
+    images: images.filter((i) => !i.variant_id),
+    variants: variants.map((v) => ({
+      id: v.id,
+      name: v.name,
+      colour_hex: v.colour_hex ?? "",
+      stock_qty: String(Number(v.stock_qty)),
+      is_active: v.is_active,
+      images: images.filter((i) => i.variant_id === v.id),
+    })),
   };
 }

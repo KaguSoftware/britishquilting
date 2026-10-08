@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { CartItem } from "@/components/cart/cart-store";
+import { sameLine, type CartItem } from "@/components/cart/cart-store";
 import type { CartQuote } from "@/lib/actions/cart";
 import { IconClose, IconLock, IconParcel, IconScissors, IconTag } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -36,8 +36,7 @@ export function OrderSummary({
   code: CodeState;
   idPrefix: string;
 }) {
-  const lineQuote = (i: CartItem) =>
-    quote?.lines.find((l) => l.productId === i.productId && l.isSwatch === Boolean(i.isSwatch) && (i.isSwatch || l.lengthM === i.lengthM));
+  const lineQuote = (i: CartItem) => quote?.lines.find((l) => sameLine(i, l));
   const codeId = `${idPrefix}-discount`;
   const deliveryLabel =
     fulfilment === "collection"
@@ -66,6 +65,7 @@ export function OrderSummary({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium leading-snug">{i.name}</p>
+                {i.variantName && <p className="mt-0.5 text-sm text-ink">{i.variantName}</p>}
                 <p className="mt-0.5 text-sm text-ink-soft">
                   {i.isSwatch
                     ? "Swatch"

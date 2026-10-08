@@ -11,9 +11,10 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { db, viewer } = await staffDb();
   const isOwner = viewer.role === "owner";
-  const [{ data: product }, { data: images }, { data: categories }, { count: waiting }] = await Promise.all([
+  const [{ data: product }, { data: images }, { data: variants }, { data: categories }, { count: waiting }] = await Promise.all([
     db.from("products").select("*").eq("id", id).maybeSingle(),
-    db.from("product_images").select("id, storage_path, alt, width, height").eq("product_id", id).order("sort_order"),
+    db.from("product_images").select("id, storage_path, alt, width, height, variant_id").eq("product_id", id).order("sort_order"),
+    db.from("product_variants").select("id, name, colour_hex, stock_qty, is_active").eq("product_id", id).order("sort_order"),
     db.from("categories").select("id, name").order("sort_order"),
     db.from("stock_alerts").select("id", { count: "exact", head: true }).eq("product_id", id).is("notified_at", null),
   ]);
@@ -33,7 +34,12 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
       <ProductEditor
         key={product.updated_at}
         isNew={false}
-        initial={toForm(isOwner ? product : { ...product, cost_price_pence: null }, (images ?? []).map((i) => ({ id: i.id, storage_path: i.storage_path, alt: i.alt ?? "", width: i.width, height: i.height })), product.id)}
+        initial={toForm(
+          isOwner ? product : { ...product, cost_price_pence: null },
+          (images ?? []).map((i) => ({ id: i.id, storage_path: i.storage_path, alt: i.alt ?? "", width: i.width, height: i.height, variant_id: i.variant_id })),
+          product.id,
+          variants ?? [],
+        )}
         categories={categories ?? []}
         showCost={isOwner}
       />

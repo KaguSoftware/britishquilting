@@ -49,7 +49,7 @@ export default async function OrderDetailPage({ params }: PageProps<"/account/or
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, number, status, fulfilment, shipping_address, billing_address, shipping_name, subtotal_pence, discount_pence, shipping_pence, total_pence, vat_included_pence, discount_code, payment_provider, is_trade, invoice_due_at, customer_note, created_at, paid_at, refunded_pence, order_items(id, name, image_path, sale_mode, is_swatch, length_m, quantity, unit_price_pence, line_total_pence), order_events(id, kind, message, data, visible_to_customer, created_at), shipments(id, carrier, tracking_number, tracking_url, shipped_at)",
+      "id, number, status, fulfilment, shipping_address, billing_address, shipping_name, subtotal_pence, discount_pence, shipping_pence, total_pence, vat_included_pence, discount_code, payment_provider, invoice_due_at, customer_note, created_at, paid_at, refunded_pence, order_items(id, name, image_path, sale_mode, is_swatch, length_m, quantity, unit_price_pence, line_total_pence), order_events(id, kind, message, data, visible_to_customer, created_at), shipments(id, carrier, tracking_number, tracking_url, shipped_at)",
     )
     .eq("number", n)
     .eq("user_id", viewer.id)
@@ -84,7 +84,6 @@ export default async function OrderDetailPage({ params }: PageProps<"/account/or
           </div>
           <p className="mt-2 text-sm text-ink-soft">
             Placed {formatDate(order.created_at)} at {formatTime(order.created_at)}
-            {order.is_trade && <span className="ml-2 border-l border-stone-300 pl-2 text-gold-600">Trade order</span>}
           </p>
         </div>
         <OrderStatusBadge status={order.status} />

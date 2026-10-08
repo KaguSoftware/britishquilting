@@ -4,17 +4,15 @@ import { render } from "@react-email/components";
 import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
-import { addDays, carrierLabel, trackingUrlFor } from "@/lib/checkout/helpers";
+import { carrierLabel, trackingUrlFor } from "@/lib/checkout/helpers";
 import { formatMetres, formatPence, storageUrl } from "@/lib/utils";
 import OrderConfirmationEmail, { type OrderEmailProps } from "@/emails/order-confirmation";
-import InvoiceOrderEmail from "@/emails/invoice-order";
 import DispatchedEmail from "@/emails/dispatched";
 import ReadyForCollectionEmail from "@/emails/ready-for-collection";
 import RefundedEmail from "@/emails/refunded";
 import OrderCancelledEmail from "@/emails/order-cancelled";
 import PaymentReceivedEmail from "@/emails/payment-received";
 import DeliveredEmail from "@/emails/delivered";
-import { TradeApprovedEmail, TradeRejectedEmail } from "@/emails/trade";
 import { BackInStockEmail, LowStockEmail } from "@/emails/stock";
 import { DisputeAlertEmail } from "@/emails/dispute-alert";
 import WelcomeNewsletterEmail from "@/emails/welcome-newsletter";
@@ -70,7 +68,6 @@ type OrderRow = {
   total_pence: number;
   vat_included_pence: number;
   discount_code: string | null;
-  is_trade: boolean;
   invoice_due_at: string | null;
   access_token: string;
   created_at: string;
@@ -155,7 +152,6 @@ async function alreadySent(orderId: string, template: string) {
   return (count ?? 0) > 0;
 }
 
-const dateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
 
 /* ────────────────────────────── public helpers (imported by checkout, webhooks and admin) */
 
@@ -170,33 +166,6 @@ export async function sendOrderConfirmation(orderId: string) {
     return ok;
   } catch (e) {
     console.error("sendOrderConfirmation", e);
-    return false;
-  }
-}
-
-/** Trade order placed on account, with bank transfer details. */
-export async function sendInvoiceOrder(orderId: string) {
-  try {
-    if (await alreadySent(orderId, "invoice-order")) return true;
-    const data = await loadOrder(orderId);
-    if (!data) return false;
-    const terms = data.settings?.invoice_terms_days ?? 30;
-    const due = data.order.invoice_due_at ? new Date(data.order.invoice_due_at) : addDays(new Date(data.order.created_at), terms);
-    const ok = await sendEmail({
-      to: data.order.email,
-      subject: `Order #${data.order.number} confirmed on account`,
-      react: InvoiceOrderEmail({
-        ...data.props,
-        company: data.profile?.company_name ?? null,
-        dueDate: dateFmt.format(due),
-        termsDays: terms,
-        bankDetails: data.settings?.bank_details ?? null,
-      }),
-    });
-    await logEmail(orderId, "invoice-order", ok);
-    return ok;
-  } catch (e) {
-    console.error("sendInvoiceOrder", e);
     return false;
   }
 }
@@ -379,47 +348,40 @@ export const sendDelivered = (orderId: string) => sendArrived(orderId, "delivere
 /** Thank-you with a review link once the customer has collected. Sent once. */
 export const sendCollected = (orderId: string) => sendArrived(orderId, "collected");
 
-export async function sendTradeDecision(userId: string, approved: boolean) {
+/**
+ * Emails everyone waiting on this product (or on one colour of it, when variantId is given)
+ * and marks their alerts as notified. Returns the number sent.
+ */
+export async function sendBackInStock(productId: string, variantId: string | null = null) {
   try {
     const db = createAdminClient();
-    const { data: p } = await db.from("profiles").select("email, full_name, company_name").eq("id", userId).maybeSingle();
-    if (!p?.email) return false;
-    const props = { firstName: p.full_name?.split(" ")[0] ?? null, company: p.company_name ?? null };
-    return await sendEmail({
-      to: p.email,
-      subject: approved ? "Your trade account is approved" : "Your trade account application",
-      react: approved ? TradeApprovedEmail(props) : TradeRejectedEmail(props),
-    });
-  } catch (e) {
-    console.error("sendTradeDecision", e);
-    return false;
-  }
-}
-
-/** Emails everyone waiting on this product and marks their alerts as notified. Returns the number sent. */
-export async function sendBackInStock(productId: string) {
-  try {
-    const db = createAdminClient();
-    const [{ data: product }, { data: alerts }] = await Promise.all([
+    let alertsQuery = db.from("stock_alerts").select("id, email").eq("product_id", productId).is("notified_at", null).limit(500);
+    alertsQuery = variantId ? alertsQuery.eq("variant_id", variantId) : alertsQuery.is("variant_id", null);
+    const [{ data: product }, { data: variant }, { data: alerts }] = await Promise.all([
       db
         .from("products")
-        .select("name, subtitle, slug, sale_mode, price_pence, product_images(storage_path, sort_order)")
+        .select("name, subtitle, slug, sale_mode, price_pence, product_images(storage_path, sort_order, variant_id)")
         .eq("id", productId)
         .maybeSingle(),
-      db.from("stock_alerts").select("id, email").eq("product_id", productId).is("notified_at", null).limit(500),
+      variantId ? db.from("product_variants").select("id, name").eq("id", variantId).maybeSingle() : Promise.resolve({ data: null }),
+      alertsQuery,
     ]);
     if (!product || !alerts?.length) return 0;
-    const images = ((product.product_images ?? []) as { storage_path: string; sort_order: number }[]).sort((a, b) => a.sort_order - b.sort_order);
+    const rank = (i: { variant_id: string | null }) => (variant && i.variant_id === variant.id ? 0 : i.variant_id == null ? 1 : 2);
+    const images = ((product.product_images ?? []) as { storage_path: string; sort_order: number; variant_id: string | null }[]).sort(
+      (a, b) => rank(a) - rank(b) || a.sort_order - b.sort_order,
+    );
+    const name = variant ? `${product.name}, ${variant.name}` : product.name;
     const props = {
-      name: product.name,
+      name,
       subtitle: product.subtitle,
-      url: `${site()}/product/${product.slug}`,
+      url: `${site()}/product/${product.slug}${variant ? `?colour=${variant.id}` : ""}`,
       image: storageUrl(images[0]?.storage_path),
       price: `${formatPence(product.price_pence)}${product.sale_mode === "metre" ? "/m" : ""}`,
     };
     let sent = 0;
     for (const a of alerts) {
-      if (await sendEmail({ to: a.email, subject: `${product.name} is back in stock`, react: BackInStockEmail(props) })) {
+      if (await sendEmail({ to: a.email, subject: `${name} is back in stock`, react: BackInStockEmail(props) })) {
         sent++;
         await db.from("stock_alerts").update({ notified_at: new Date().toISOString() }).eq("id", a.id);
       }
@@ -437,7 +399,7 @@ export async function sendLowStock(productIds: string[]) {
     if (!productIds.length) return false;
     const db = createAdminClient();
     const [{ data: products }, { data: settings }] = await Promise.all([
-      db.from("products").select("id, name, subtitle, sale_mode, stock_qty, low_stock_threshold").in("id", productIds),
+      db.from("products").select("id, name, subtitle, sale_mode, stock_qty, low_stock_threshold, product_variants(name, stock_qty, is_active, sort_order)").in("id", productIds),
       db.from("store_settings").select("low_stock_email").eq("id", 1).maybeSingle(),
     ]);
     const to = settings?.low_stock_email || env.STAFF_NOTIFY_EMAIL;
@@ -447,12 +409,23 @@ export async function sendLowStock(productIds: string[]) {
       to,
       subject: `Low stock: ${products.map((p) => p.name).slice(0, 3).join(", ")}${products.length > 3 ? ` and ${products.length - 3} more` : ""}`,
       react: LowStockEmail({
-        products: products.map((p) => ({
-          name: p.subtitle ? `${p.name}, ${p.subtitle}` : p.name,
-          stock: unit(p.sale_mode, Number(p.stock_qty)),
-          threshold: unit(p.sale_mode, Number(p.low_stock_threshold)),
-          adminUrl: `${site()}/admin/products/${p.id}`,
-        })),
+        // Products sold in colours list each colour that is running low.
+        products: products.flatMap((p) => {
+          const base = p.subtitle ? `${p.name}, ${p.subtitle}` : p.name;
+          const row = (name: string, stock: number) => ({
+            name,
+            stock: unit(p.sale_mode, stock),
+            threshold: unit(p.sale_mode, Number(p.low_stock_threshold)),
+            adminUrl: `${site()}/admin/products/${p.id}`,
+          });
+          const variants = ((p.product_variants ?? []) as { name: string; stock_qty: number; is_active: boolean; sort_order: number }[])
+            .filter((v) => v.is_active)
+            .sort((a, b) => a.sort_order - b.sort_order);
+          if (!variants.length) return [row(base, Number(p.stock_qty))];
+          return variants
+            .filter((v) => Number(v.stock_qty) <= Number(p.low_stock_threshold))
+            .map((v) => row(`${p.name}, ${v.name}`, Number(v.stock_qty)));
+        }),
       }),
     });
   } catch (e) {

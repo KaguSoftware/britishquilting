@@ -54,7 +54,6 @@ export default async function PackingSlip({ params }: { params: Promise<{ id: st
           <div className="text-sm leading-relaxed">
             <p><span className="font-semibold">Email:</span> {order.email}</p>
             {order.shipping_name && <p><span className="font-semibold">Service:</span> {order.shipping_name}</p>}
-            {order.is_trade && <p className="font-semibold">Trade order</p>}
           </div>
         </section>
 

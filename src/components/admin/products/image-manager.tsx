@@ -6,7 +6,7 @@ import { IconArrowLeft, IconArrowRight, IconGrip, IconImage, IconTrash, IconUplo
 import { createClient } from "@/lib/supabase/client";
 import { cn, storageUrl } from "@/lib/utils";
 
-export type EditorImage = { id?: string; storage_path: string; alt: string; width: number | null; height: number | null };
+export type EditorImage = { id?: string; storage_path: string; alt: string; width: number | null; height: number | null; variant_id?: string | null };
 
 /** Shrink big photos to at most 2400px and convert to WebP before uploading. */
 export async function prepareImage(file: File, max = 2400): Promise<{ blob: Blob; ext: string; width: number; height: number }> {
@@ -44,11 +44,16 @@ export function ImageManager({
   images,
   onChange,
   productName,
+  folder,
+  hint = "Large photos are resized for you. The first photo is the one shoppers see first.",
 }: {
   productId: string;
   images: EditorImage[];
   onChange: (imgs: EditorImage[]) => void;
   productName: string;
+  /** storage folder, defaults to products/<productId> */
+  folder?: string;
+  hint?: string;
 }) {
   const [uploading, setUploading] = useState(0);
   const [over, setOver] = useState(false);
@@ -63,7 +68,7 @@ export function ImageManager({
     setUploading((n) => n + list.length);
     for (const file of list) {
       try {
-        const up = await uploadToBucket("products", `products/${productId}`, file);
+        const up = await uploadToBucket("products", folder ?? `products/${productId}`, file);
         const next = [...latest.current, { storage_path: up.path, alt: productName, width: up.width, height: up.height }];
         latest.current = next;
         onChange(next);
@@ -176,7 +181,7 @@ export function ImageManager({
           <span>
             <span className="font-medium text-aubergine-800">Choose photos</span> or drag them here
           </span>
-          <span className="text-xs text-stone-500">{uploading ? `Uploading ${uploading}...` : "Large photos are resized for you. The first photo is the one shoppers see first."}</span>
+          <span className="text-xs text-stone-500">{uploading ? `Uploading ${uploading}...` : hint}</span>
         </button>
         <input
           ref={input}

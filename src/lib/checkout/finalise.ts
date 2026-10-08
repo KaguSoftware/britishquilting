@@ -49,7 +49,17 @@ async function checkLowStock(orderId: string) {
   const { data: items } = await db.from("order_items").select("product_id").eq("order_id", orderId).eq("is_swatch", false);
   const ids = [...new Set((items ?? []).map((i) => i.product_id).filter(Boolean))] as string[];
   if (!ids.length) return;
-  const { data: products } = await db.from("products").select("id, stock_qty, low_stock_threshold, track_stock").in("id", ids);
-  const low = (products ?? []).filter((p) => p.track_stock && Number(p.stock_qty) <= Number(p.low_stock_threshold)).map((p) => p.id);
+  const { data: products } = await db
+    .from("products")
+    .select("id, stock_qty, low_stock_threshold, track_stock, product_variants(stock_qty, is_active)")
+    .in("id", ids);
+  // A product sold in colours is low when any one colour is.
+  const levels = (p: { stock_qty: number; product_variants: { stock_qty: number; is_active: boolean }[] | null }) => {
+    const variants = (p.product_variants ?? []).filter((v) => v.is_active);
+    return variants.length ? variants.map((v) => Number(v.stock_qty)) : [Number(p.stock_qty)];
+  };
+  const low = (products ?? [])
+    .filter((p) => p.track_stock && levels(p).some((n) => n <= Number(p.low_stock_threshold)))
+    .map((p) => p.id);
   if (low.length) await sendLowStock(low);
 }

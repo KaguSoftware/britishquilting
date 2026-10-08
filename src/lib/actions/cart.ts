@@ -3,15 +3,15 @@
 import { lineErrorMessage } from "@/lib/pricing";
 import { computeQuote, type QuoteInput } from "@/lib/data/quote";
 
-/** Client-safe shape: no trade prices or stock levels leak beyond what the viewer is entitled to. */
+/** Client-safe shape: no stock levels leak beyond what the viewer is entitled to. */
 export async function quoteCart(raw: QuoteInput) {
   try {
-    const { q, viewer, settings, discount, discountError } = await computeQuote(raw);
+    const { q, settings, discount, discountError } = await computeQuote(raw);
     return {
       ok: true as const,
-      trade: Boolean(viewer?.isTrade),
       lines: q.lines.map((l) => ({
         productId: l.line.productId,
+        variantId: l.line.variantId ?? null,
         lengthM: l.line.lengthM,
         isSwatch: Boolean(l.line.isSwatch),
         unit: l.unit,

@@ -10,19 +10,27 @@ export type FormState = { ok: boolean; message: string } | null;
 
 /* ───────────────────────── back-in-stock alerts */
 
-const alertSchema = z.object({ productId: z.uuid(), email: z.email().max(254) });
+const alertSchema = z.object({ productId: z.uuid(), variantId: z.uuid().nullable(), email: z.email().max(254) });
 
 export async function requestStockAlert(_: FormState, form: FormData): Promise<FormState> {
   if (!(await rateLimit("stock-alert", { limit: 20, windowSeconds: 3600 })))
     return { ok: false, message: "Too many requests. Please try again in a little while." };
-  const parsed = alertSchema.safeParse({ productId: form.get("productId"), email: form.get("email") });
+  const parsed = alertSchema.safeParse({ productId: form.get("productId"), variantId: form.get("variantId") || null, email: form.get("email") });
   if (!parsed.success) return { ok: false, message: "Please enter a valid email address." };
   const db = createAdminClient();
   const { data: product } = await db.from("products").select("id").eq("id", parsed.data.productId).eq("is_active", true).maybeSingle();
   if (!product) return { ok: false, message: "This fabric is no longer available." };
+  const variantId = parsed.data.variantId;
+  if (variantId) {
+    const { data: variant } = await db.from("product_variants").select("id").eq("id", variantId).eq("product_id", product.id).eq("is_active", true).maybeSingle();
+    if (!variant) return { ok: false, message: "This colour is no longer available." };
+  }
   const { error } = await db
     .from("stock_alerts")
-    .upsert({ product_id: product.id, email: parsed.data.email.toLowerCase(), notified_at: null }, { onConflict: "product_id,email" });
+    .upsert(
+      { product_id: product.id, variant_id: variantId, email: parsed.data.email.toLowerCase(), notified_at: null },
+      { onConflict: "product_id,variant_id,email" },
+    );
   if (error) return { ok: false, message: "Something went wrong. Please try again." };
   return { ok: true, message: "We'll email you the moment it's back on the bolt." };
 }
@@ -149,7 +157,7 @@ const contactSchema = z.object({
   name: z.string().trim().min(1, "Please tell us your name.").max(100),
   email: z.email("Please enter a valid email address.").max(254),
   phone: z.string().trim().max(40).optional(),
-  topic: z.enum(["order", "product", "trade", "other"]).default("other"),
+  topic: z.enum(["order", "product", "other"]).default("other"),
   message: z.string().trim().min(10, "Please add a little more detail.").max(5000),
   company: z.string().max(0).optional(), // honeypot
 });

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconMinus as Minus, IconPlus as Plus, IconScissors as Scissors, IconClose as X } from "@/components/icons";
-import { useCart, type CartItem } from "./cart-store";
+import { sameLine, toLine, useCart, type CartItem } from "./cart-store";
 import { quoteCart, type CartQuote } from "@/lib/actions/cart";
 import { formatMetres, formatPence } from "@/lib/utils";
 
@@ -20,7 +20,7 @@ export function CartDrawer() {
   // Re-quote from the server whenever the basket changes while open.
   useEffect(() => {
     if (!open || items.length === 0) return;
-    const lines = items.map(({ productId, lengthM, quantity, isSwatch }) => ({ productId, lengthM, quantity, isSwatch }));
+    const lines = items.map(toLine);
     const mine = ++seq.current;
     startTransition(async () => {
       const res = await quoteCart({ lines });
@@ -41,8 +41,7 @@ export function CartDrawer() {
     };
   }, [open, setOpen]);
 
-  const lineQuote = (i: CartItem) =>
-    q?.lines.find((l) => l.productId === i.productId && l.isSwatch === Boolean(i.isSwatch) && (i.isSwatch || l.lengthM === i.lengthM));
+  const lineQuote = (i: CartItem) => q?.lines.find((l) => sameLine(i, l));
   const subtotal = q?.subtotal ?? items.reduce((s, i) => s + estimate(i), 0);
   const threshold = q?.freeThreshold ?? null;
   const toFree = threshold != null ? Math.max(0, threshold - subtotal) : null;
@@ -131,12 +130,12 @@ export function CartDrawer() {
                             <span className="shrink-0 tabular-nums">{formatPence(lq?.total ?? estimate(i))}</span>
                           </div>
                           <p className="mt-0.5 text-sm text-ink-soft">
-                            {i.isSwatch ? "Swatch" : i.saleMode === "metre" ? `${formatMetres(i.lengthM ?? 0)} cut` : i.subtitle}
+                            {[i.variantName, i.isSwatch ? "Swatch" : i.saleMode === "metre" ? `${formatMetres(i.lengthM ?? 0)} cut` : i.subtitle].filter(Boolean).join(", ")}
                           </p>
                           {lq?.error && <p className="mt-1 text-sm text-danger">{lq.error}</p>}
                           <div className="mt-auto flex items-center justify-between pt-3">
                             {i.isSwatch ? (
-                              <span className="text-xs text-ink-soft">One per fabric</span>
+                              <span className="text-xs text-ink-soft">One per colour</span>
                             ) : (
                               <Stepper
                                 value={i.quantity}

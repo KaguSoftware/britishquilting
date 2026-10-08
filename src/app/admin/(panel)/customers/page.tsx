@@ -12,7 +12,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const q = (sp.q ?? "").trim().replace(/[%,()]/g, "");
   const { db } = await staffDb();
-  let query = db.from("profiles").select("id, email, full_name, company_name, role, trade_status, created_at").order("created_at", { ascending: false }).limit(1000);
+  let query = db.from("profiles").select("id, email, full_name, company_name, role, created_at").order("created_at", { ascending: false }).limit(1000);
   if (q) query = query.or(`email.ilike.%${q}%,full_name.ilike.%${q}%,company_name.ilike.%${q}%`);
   const [{ data: people }, { data: orders }] = await Promise.all([
     query,
@@ -66,7 +66,6 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                 <span className="min-w-0">
                   <span className="block truncate font-medium">
                     {c.full_name || c.email}
-                    {c.trade_status === "approved" && <Badge tone="gold" className="ml-2 align-middle">Trade</Badge>}
                     {(c.role === "staff" || c.role === "owner") && <Badge tone="aubergine" className="ml-2 align-middle">Staff</Badge>}
                   </span>
                   <span className="block truncate text-xs text-stone-500">{[c.company_name, c.email].filter(Boolean).join(" · ")}</span>

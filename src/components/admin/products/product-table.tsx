@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { IconBolt, IconCheck, IconPencil } from "@/components/icons";
-import { setProductActive, updateStock } from "@/lib/actions/admin/products";
+import { setProductActive, updateStock, updateVariantStock } from "@/lib/actions/admin/products";
 import { cn, formatPence, storageUrl } from "@/lib/utils";
 import { SALE_MODE_LABEL } from "../format";
 import { Switch, useAction } from "../controls";
+import type { ActionResult } from "@/lib/actions/admin/types";
 
 export type ProductRow = {
   id: string;
@@ -23,6 +24,8 @@ export type ProductRow = {
   category: string | null;
   category_id: string | null;
   image: string | null;
+  /** active and hidden colours, in shop order; empty for single-colour products */
+  variants: { id: string; name: string; colour_hex: string | null; stock_qty: number; is_active: boolean }[];
 };
 
 export function ProductTable({ rows }: { rows: ProductRow[] }) {
@@ -79,8 +82,26 @@ function Row({ p }: { p: ProductRow }) {
         {formatPence(p.price_pence)} <span className="text-stone-500">{SALE_MODE_LABEL[p.sale_mode]}</span>
       </td>
       <td className="md:table-cell md:px-3 md:py-3">
-        {p.track_stock ? (
-          <StockCell p={p} unit={unit} />
+        {p.track_stock && p.variants.length ? (
+          <ul className="space-y-1.5">
+            {p.variants.map((v) => (
+              <li key={v.id} className="flex items-center gap-2.5">
+                <span className="size-3 shrink-0 rounded-full border border-ink/20" style={{ background: v.colour_hex ?? "transparent" }} />
+                <span className={cn("w-24 truncate text-xs", v.is_active ? "text-ink-soft" : "text-stone-500 line-through")} title={v.name}>
+                  {v.name}
+                </span>
+                <StockCell
+                  label={`${p.name}, ${v.name}`}
+                  qty={v.stock_qty}
+                  threshold={p.low_stock_threshold}
+                  unit={unit}
+                  save={(n) => updateVariantStock(v.id, n)}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : p.track_stock ? (
+          <StockCell label={p.name} qty={p.stock_qty} threshold={p.low_stock_threshold} unit={unit} save={(n) => updateStock(p.id, n)} />
         ) : (
           <span className="text-stone-500">Not tracked</span>
         )}
@@ -108,33 +129,51 @@ function Name({ p }: { p: ProductRow }) {
         <IconPencil className="size-3.5 opacity-0 transition group-hover:opacity-100" />
       </Link>
       <p className="truncate text-xs text-stone-500">
-        {[p.colour, p.category, p.is_featured ? "Featured" : null].filter(Boolean).join(" · ") || "No category"}
+        {[
+          p.variants.length ? `${p.variants.length} ${p.variants.length === 1 ? "colour" : "colours"}` : p.colour,
+          p.category,
+          p.is_featured ? "Featured" : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || "No category"}
       </p>
     </>
   );
 }
 
-function StockCell({ p, unit }: { p: ProductRow; unit: string }) {
+function StockCell({
+  label,
+  qty,
+  threshold,
+  unit,
+  save: persist,
+}: {
+  label: string;
+  qty: number;
+  threshold: number;
+  unit: string;
+  save: (n: number) => Promise<ActionResult<unknown>>;
+}) {
   const { run, pending } = useAction();
-  const [value, setValue] = useState(String(p.stock_qty));
-  const [saved, setSaved] = useState(p.stock_qty);
+  const [value, setValue] = useState(String(qty));
+  const [saved, setSaved] = useState(qty);
   // Follow server changes (undo, orders, other staff) after router.refresh().
-  const [serverQty, setServerQty] = useState(p.stock_qty);
-  if (p.stock_qty !== serverQty) {
-    setServerQty(p.stock_qty);
-    setSaved(p.stock_qty);
-    setValue(String(p.stock_qty));
+  const [serverQty, setServerQty] = useState(qty);
+  if (qty !== serverQty) {
+    setServerQty(qty);
+    setSaved(qty);
+    setValue(String(qty));
   }
   const n = Number(value);
   const dirty = value !== "" && Number.isFinite(n) && n !== saved;
-  const low = saved > 0 && saved <= p.low_stock_threshold;
+  const low = saved > 0 && saved <= threshold;
 
   const save = () => {
     if (!dirty) return;
     if (n < 0) return setValue(String(saved));
     const before = saved;
     setSaved(n);
-    run(() => updateStock(p.id, n), { undo: () => updateStock(p.id, before) }).then((r) => {
+    run(() => persist(n), { undo: () => persist(before) }).then((r) => {
       if (!r.ok) {
         setSaved(before);
         setValue(String(before));
@@ -156,7 +195,7 @@ function StockCell({ p, unit }: { p: ProductRow; unit: string }) {
           onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ""))}
           onBlur={save}
           inputMode="decimal"
-          aria-label={`Stock for ${p.name}`}
+          aria-label={`Stock for ${label}`}
           className={cn(
             unit.length > 1 ? "pr-11" : "pr-6",
             "h-9 w-24 rounded-[3px] border bg-white pl-2.5 text-sm tabular-nums focus:border-aubergine-500 focus:outline-none",

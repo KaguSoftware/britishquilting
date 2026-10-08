@@ -30,7 +30,6 @@ export default function PrivacyPage() {
           <h2>What we collect</h2>
           <ul>
             <li>Your name, email, phone number and delivery address when you order or create an account.</li>
-            <li>Business details you provide when applying for a trade account.</li>
             <li>Order history, reviews you submit, and messages you send us.</li>
             <li>Basic technical data such as your browser type, used to keep the site secure and working.</li>
           </ul>
@@ -38,7 +37,6 @@ export default function PrivacyPage() {
           <h2>Why we use it</h2>
           <ul>
             <li>To process, deliver and support your orders (contract).</li>
-            <li>To run trade accounts and invoicing (contract and legitimate interests).</li>
             <li>To send our newsletter, only if you&apos;ve opted in (consent). You can unsubscribe at any time.</li>
             <li>To keep accounting records as required by law (legal obligation).</li>
           </ul>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { saveSettings } from "@/lib/actions/admin/store";
 import { SaveBar, SwitchRow, useAction, useUnsavedGuard } from "./controls";
-import { Card, Field, Input, Textarea, UnitInput } from "./ui";
+import { Card, Field, Input, Textarea } from "./ui";
 
 type S = {
   collection_enabled: boolean;
@@ -45,17 +45,6 @@ export function SettingsForm({ initial }: { initial: S }) {
               </Field>
             </>
           )}
-        </div>
-      </Card>
-
-      <Card title="Trade invoices" description="For approved trade customers who pay on account.">
-        <div className="space-y-4">
-          <Field label="Days to pay" htmlFor="terms" className="sm:max-w-xs">
-            <UnitInput unit="days" id="terms" value={s.invoice_terms_days} onChange={(e) => set("invoice_terms_days", e.target.value.replace(/[^\d]/g, ""))} />
-          </Field>
-          <Field label="Bank details printed on invoices" htmlFor="bank" hint="Account name, sort code and account number.">
-            <Textarea id="bank" value={s.bank_details} onChange={(e) => set("bank_details", e.target.value)} className="min-h-28 font-mono text-sm" />
-          </Field>
         </div>
       </Card>
 

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   description:
     "Family-run in London since 1990. Cotton sateen linings, bump and domette interlinings and workroom paper, cut to your length and delivered across the UK.",
   openGraph: { siteName: "British Quilting", locale: "en_GB", type: "website" },
-  icons: { icon: "/brand/logo.png", apple: "/brand/logo.png" },
+  icons: { icon: "/brand/icon.png", apple: "/brand/apple-icon.png" },
 };
 
 export const viewport: Viewport = { themeColor: "#1c0a24" };

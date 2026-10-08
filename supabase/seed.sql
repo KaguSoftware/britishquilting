@@ -10,19 +10,15 @@ insert into public.products (slug, name, subtitle, description, category_id, sal
 select v.slug, v.name, v.subtitle, v.description, c.id, v.mode::public.sale_mode, v.price, v.trade, v.roll, v.weight, v.stock,
        v.colour, v.hex, v.comp, v.width, v.gsm, true, v.featured, v.sort
 from (values
-  ('ivory-cotton-sateen-lining', 'Cotton Sateen Lining', 'Ivory · 137cm', 'A soft, lustrous 100% cotton sateen: the workroom standard for hand-finished curtains.', 'linings', 'metre', 495, 395, null::numeric, 180, 850, 'Ivory', '#F3EBDD', '100% Cotton', 137, 120, true, 1),
-  ('white-cotton-sateen-lining', 'Cotton Sateen Lining', 'White · 137cm', 'Crisp white cotton sateen with a gentle sheen.', 'linings', 'metre', 495, 395, null, 180, 620, 'White', '#FAFAF7', '100% Cotton', 137, 120, false, 2),
-  ('blackout-lining', 'Blackout Lining', 'Ivory · 137cm', 'Three-pass blackout coating for bedrooms and nurseries.', 'linings', 'metre', 795, 650, null, 320, 400, 'Ivory', '#EFE6D6', 'Polyester / Cotton', 137, 260, true, 3),
+  ('cotton-sateen-lining', 'Cotton Sateen Lining', '137cm wide', 'A soft, lustrous 100% cotton sateen: the workroom standard for hand-finished curtains. In ivory, white and cream.', 'linings', 'metre', 495, 395, null::numeric, 180, 0, 'Ivory', '#F3EBDD', '100% Cotton', 137, 120, true, 1),
+  ('blackout-lining', 'Blackout Lining', '137cm wide', 'Three-pass blackout coating for bedrooms and nurseries. Ivory for most face fabrics, charcoal for dark ones.', 'linings', 'metre', 795, 650, null, 320, 0, 'Ivory', '#EFE6D6', 'Polyester / Cotton', 137, 260, true, 3),
   ('cotton-bump-interlining', 'Cotton Bump Interlining', 'Natural · 137cm', 'Heavyweight bump for luxurious fullness and insulation.', 'interlinings', 'metre', 895, 720, null, 420, 300, 'Natural', '#E8DCC4', '100% Cotton', 137, 330, true, 4),
   ('domette-interlining', 'Domette Interlining', 'Natural · 137cm', 'Lighter than bump, ideal for blinds and lighter drapes.', 'interlinings', 'metre', 645, 520, null, 250, 280, 'Natural', '#EDE3CF', 'Cotton / Poly', 137, 200, false, 5),
   ('bump-full-roll', 'Cotton Bump, Full Roll', '50m roll · 137cm', 'The full 50 metre roll for workrooms.', 'interlinings', 'roll', 37500, 31000, 50, 21000, 12, 'Natural', '#E8DCC4', '100% Cotton', 137, 330, false, 6),
   ('pattern-paper-pack', 'Dot & Cross Pattern Paper', '10 sheets · A0', 'Marked 1-inch dot and cross paper for accurate pattern drafting.', 'paper', 'unit', 1250, 990, null, 600, 140, null, null, null, null, null, true, 7),
-  ('cream-cotton-sateen-lining', 'Cotton Sateen Lining', 'Cream · 137cm', 'Warm cream sateen that flatters natural linens and wools.', 'linings', 'metre', 495, 395, null, 180, 540, 'Cream', '#EFE3C8', '100% Cotton', 137, 120, false, 9),
   ('wide-cotton-sateen-lining', 'Wide Cotton Sateen', 'Ivory · 280cm', 'Extra-wide sateen for seamless linings on tall windows.', 'linings', 'metre', 1150, 920, null, 360, 180, 'Ivory', '#F1E8D6', '100% Cotton', 280, 125, false, 10),
   ('thermal-lining', 'Thermal Lining', 'Silver-backed · 137cm', 'Acrylic foam-backed lining that keeps warmth in and draughts out.', 'linings', 'metre', 695, 560, null, 260, 320, 'Oyster', '#E4DDD0', 'Polyester / Cotton', 137, 210, false, 11),
-  ('charcoal-blackout-lining', 'Blackout Lining', 'Charcoal · 137cm', 'Deep charcoal blackout for dark-toned face fabrics.', 'linings', 'metre', 795, 650, null, 320, 150, 'Charcoal', '#4A4749', 'Polyester / Cotton', 137, 260, false, 12),
-  ('coloured-sateen-aubergine', 'Coloured Sateen Lining', 'Aubergine · 137cm', 'A contrast lining in our signature deep aubergine.', 'linings', 'metre', 595, 480, null, 180, 90, 'Aubergine', '#4A1D5C', '100% Cotton', 137, 120, true, 13),
-  ('coloured-sateen-sage', 'Coloured Sateen Lining', 'Sage · 137cm', 'Soft sage contrast lining for country interiors.', 'linings', 'metre', 595, 480, null, 180, 8, 'Sage', '#A7B09A', '100% Cotton', 137, 120, false, 14),
+  ('coloured-sateen-lining', 'Coloured Sateen Lining', '137cm wide', 'Contrast sateen linings, from our signature deep aubergine to a soft country sage.', 'linings', 'metre', 595, 480, null, 180, 0, 'Aubergine', '#4A1D5C', '100% Cotton', 137, 120, true, 13),
   ('sarille-interlining', 'Sarille Interlining', 'White · 137cm', 'Lightweight, washable synthetic interlining with a soft loft.', 'interlinings', 'metre', 595, 480, null, 200, 260, 'White', '#F4F2EC', '100% Polyester', 137, 150, false, 15),
   ('flannelette-interlining', 'Flannelette Interlining', 'Natural · 137cm', 'Brushed cotton flannelette, the traditional choice for blinds.', 'interlinings', 'metre', 545, 440, null, 190, 0, 'Natural', '#EADFC9', '100% Cotton', 137, 170, false, 16),
   ('domette-full-roll', 'Domette, Full Roll', '50m roll · 137cm', 'A full 50 metre roll of domette for busy workrooms.', 'interlinings', 'roll', 27500, 22500, 50, 12500, 6, 'Natural', '#EDE3CF', 'Cotton / Poly', 137, 200, false, 17),
@@ -33,6 +29,21 @@ from (values
 ) as v(slug, name, subtitle, description, cat, mode, price, trade, roll, weight, stock, colour, hex, comp, width, gsm, featured, sort)
 join public.categories c on c.slug = v.cat
 on conflict (slug) do nothing;
+
+-- Colours: one product, several colours, each with its own stock (the product's stock is their total).
+insert into public.product_variants (product_id, name, colour_hex, stock_qty, sort_order)
+select p.id, v.name, v.hex, v.stock, v.sort
+from (values
+  ('cotton-sateen-lining', 'Ivory', '#F3EBDD', 850, 0),
+  ('cotton-sateen-lining', 'White', '#FAFAF7', 620, 1),
+  ('cotton-sateen-lining', 'Cream', '#EFE3C8', 540, 2),
+  ('blackout-lining', 'Ivory', '#EFE6D6', 400, 0),
+  ('blackout-lining', 'Charcoal', '#4A4749', 150, 1),
+  ('coloured-sateen-lining', 'Aubergine', '#4A1D5C', 90, 0),
+  ('coloured-sateen-lining', 'Sage', '#A7B09A', 8, 1)
+) as v(slug, name, hex, stock, sort)
+join public.products p on p.slug = v.slug
+where not exists (select 1 from public.product_variants x where x.product_id = p.id);
 
 insert into public.shipping_rates (name, carrier, min_weight_g, max_weight_g, price_pence, estimated_days, sort_order) values
   ('Royal Mail Tracked 48', 'royal_mail', 0, 2000, 495, '2–3 working days', 1),

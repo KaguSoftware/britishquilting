@@ -194,7 +194,7 @@ ${settings.collection_hours}` : ""}
             <div>
               <h3 className="text-sm font-medium">Payment</h3>
               <p className="mt-2 text-sm text-ink-soft">
-                {order.payment_provider === "paypal" ? "PayPal" : order.payment_provider === "invoice" ? "Trade account, pay by invoice" : "Card"}
+                {order.payment_provider === "paypal" ? "PayPal" : order.payment_provider === "invoice" ? "Invoice" : "Card"}
                 {order.invoice_due_at && (
                   <>
                     <br />

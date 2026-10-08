@@ -11,10 +11,10 @@ import { createOrder, type CheckoutInput, type CreateOrderResult } from "@/lib/a
 import { isUkPhone } from "@/lib/checkout/helpers";
 import { Button } from "@/components/ui/button";
 import { FormMessage } from "@/components/ui/field";
-import { IconCard, IconDocument, IconLock, IconSpinner } from "@/components/icons";
+import { IconCard, IconLock, IconSpinner } from "@/components/icons";
 import { cn, formatPence } from "@/lib/utils";
 
-export type PaymentMethod = "card" | "paypal" | "invoice";
+export type PaymentMethod = "card" | "paypal";
 type ServerError = Extract<CreateOrderResult, { ok: false }>;
 
 type Lines = CheckoutInput["lines"];
@@ -169,8 +169,6 @@ type SectionProps = {
   method: PaymentMethod;
   setMethod: (m: PaymentMethod) => void;
   payments: { stripeKey: string | null; paypalClientId: string | null };
-  isTrade: boolean;
-  invoiceTermsDays: number;
   total: number | null;
   canPay: boolean;
   checkForm: () => boolean;
@@ -184,7 +182,7 @@ export function PaymentSection(p: SectionProps) {
   const cardOn = Boolean(p.payments.stripeKey);
   const paypalOn = Boolean(p.payments.paypalClientId);
 
-  if (!cardOn && !paypalOn && !p.isTrade) {
+  if (!cardOn && !paypalOn) {
     return (
       <FormMessage tone="info">
         Online payment is being set up and will be available very shortly. In the meantime, please{" "}
@@ -196,7 +194,6 @@ export function PaymentSection(p: SectionProps) {
   const options: { id: PaymentMethod; label: string; sub: string; available: boolean; icon: React.ReactNode; show: boolean }[] = [
     { id: "card", label: "Card", sub: "Visa, Mastercard, Amex", available: cardOn, icon: <IconCard className="size-5" />, show: true },
     { id: "paypal", label: "PayPal", sub: "Pay with your PayPal account", available: paypalOn, icon: <PayPalMark />, show: true },
-    { id: "invoice", label: "Pay by invoice", sub: `Trade account, ${p.invoiceTermsDays} day terms`, available: true, icon: <IconDocument className="size-5" />, show: p.isTrade },
   ];
 
   return (
@@ -249,7 +246,6 @@ export function PaymentSection(p: SectionProps) {
                       <div className="px-1 pb-6 pt-2">
                         {o.id === "card" && <CardPay {...p} />}
                         {o.id === "paypal" && <PayPalPay {...p} />}
-                        {o.id === "invoice" && <InvoicePay {...p} />}
                       </div>
                     </motion.div>
                   )}
@@ -441,40 +437,5 @@ function PayPalMark() {
       <path d="M8.2 21H4.6a.5.5 0 0 1-.5-.6L6.9 3.5A.9.9 0 0 1 7.8 3h6c3.3 0 5.1 1.7 4.6 4.6-.6 3.6-3 5.2-6.4 5.2H10a.8.8 0 0 0-.8.7L8.2 21Z" opacity=".55" />
       <path d="M19.4 8.2c-.7 3.7-3.2 5.3-6.6 5.3h-1.6a.8.8 0 0 0-.8.7l-.9 5.5-.2 1.3H12a.7.7 0 0 0 .7-.6l.1-.4.6-3.8v-.2a.7.7 0 0 1 .7-.6h.5c2.9 0 5.1-1.2 5.8-4.6.3-1.4.1-2.6-.6-3.4l-.4.8Z" />
     </svg>
-  );
-}
-
-/* ───────────────────────────────────────────── Invoice (approved trade only; the server re-checks) */
-
-function InvoicePay({ total, canPay, checkForm, buildInput, onServerError, formError, setFormError, invoiceTermsDays }: SectionProps) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  async function place() {
-    if (busy || !checkForm()) return;
-    setBusy(true);
-    setFormError(null);
-    try {
-      const res = await createOrder(buildInput("invoice"));
-      if (!res.ok) {
-        onServerError(res);
-        setBusy(false);
-        return;
-      }
-      router.push(res.successUrl);
-    } catch {
-      setFormError("We couldn't place your order just now. Please try again.");
-      setBusy(false);
-    }
-  }
-  return (
-    <div>
-      <p className="text-sm leading-relaxed text-ink-soft">
-        We&apos;ll prepare your order straight away and email an invoice with our bank details. Payment is due within {invoiceTermsDays} days.
-      </p>
-      {formError && <FormMessage className="mt-4">{formError}</FormMessage>}
-      <Button size="lg" className="mt-6 w-full" onClick={place} loading={busy} disabled={!canPay}>
-        Place order on account{total != null ? `, ${formatPence(total)}` : ""}
-      </Button>
-    </div>
   );
 }

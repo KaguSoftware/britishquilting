@@ -9,8 +9,10 @@ import { Stepper } from "@/components/cart/cart-drawer";
 import Magnet from "@/components/reactbits/Magnet";
 import { requestStockAlert, type FormState } from "@/lib/actions/shop";
 import { MAX_SWATCHES, type SaleMode } from "@/lib/pricing";
-import { cn, formatMetres, formatPence } from "@/lib/utils";
+import { cn, formatMetres, formatPence, storageUrl } from "@/lib/utils";
 import { btnPrimary, btnSecondary, inputCls } from "./bits";
+import { ColourSwatches, useColour } from "./colour-choice";
+import { photosFor } from "@/lib/photos";
 
 export type PurchaseProduct = {
   id: string;
@@ -20,7 +22,6 @@ export type PurchaseProduct = {
   saleMode: SaleMode;
   pricePence: number;
   comparePence: number | null;
-  tradePricePence: number | null;
   minLength: number;
   step: number;
   maxLength: number | null;
@@ -35,9 +36,19 @@ export type PurchaseProduct = {
 const EPS = 1e-6;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export function PurchasePanel({ p }: { p: PurchaseProduct }) {
+export function PurchasePanel({ p: base }: { p: PurchaseProduct }) {
   const { add, items, hydrated } = useCart();
-  const unit = p.tradePricePence ?? p.pricePence;
+  const { colours, selected, images } = useColour();
+  const hasColours = colours.length > 0;
+  // With colours, availability and the basket photo follow the chosen colour.
+  const colourImage = selected ? photosFor(images, selected.id)[0]?.storage_path : undefined;
+  const p: PurchaseProduct = selected
+    ? { ...base, inStock: selected.in_stock, lowStock: selected.low_stock, image: colourImage ? storageUrl(colourImage) : base.image }
+    : hasColours
+      ? { ...base, inStock: colours.some((c) => c.in_stock), lowStock: false }
+      : base;
+  const needsColour = hasColours && !selected;
+  const unit = p.pricePence;
   const isMetre = p.saleMode === "metre";
   const snap = (v: number) => {
     let n = Number.isFinite(v) ? v : p.minLength;
@@ -63,7 +74,7 @@ export function PurchasePanel({ p }: { p: PurchaseProduct }) {
   }, []);
 
   const total = isMetre ? Math.round(unit * length * qty) : unit * qty;
-  const swatchInCart = items.some((i) => i.productId === p.id && i.isSwatch);
+  const swatchInCart = items.some((i) => i.productId === p.id && i.isSwatch && (i.variantId ?? null) === (selected?.id ?? null));
   const swatchCount = items.filter((i) => i.isSwatch).length;
   const swatchFull = swatchCount >= MAX_SWATCHES;
   const chips = [1, 2, 5, 10].filter((c) => c >= p.minLength - EPS && (p.maxLength == null || c <= p.maxLength + EPS));
@@ -74,8 +85,15 @@ export function PurchasePanel({ p }: { p: PurchaseProduct }) {
   };
 
   const addToBasket = () => {
+    if (needsColour) {
+      toast.error("Please choose a colour first");
+      document.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Colour"] [role="radio"]')?.focus();
+      return;
+    }
     add({
       productId: p.id,
+      variantId: selected?.id,
+      variantName: selected?.name ?? null,
       lengthM: isMetre ? length : undefined,
       quantity: qty,
       name: p.name,
@@ -87,14 +105,17 @@ export function PurchasePanel({ p }: { p: PurchaseProduct }) {
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 2200);
-    toast.success(`${p.name} added to your basket`, {
+    toast.success(`${selected ? `${p.name}, ${selected.name}` : p.name} added to your basket`, {
       description: isMetre ? `${qty} x ${formatMetres(length)}, cut to order` : `Quantity ${qty}`,
     });
   };
 
   const addSwatch = () => {
+    if (needsColour) return void toast.error("Please choose a colour for your swatch");
     add({
       productId: p.id,
+      variantId: selected?.id,
+      variantName: selected?.name ?? null,
       isSwatch: true,
       quantity: 1,
       name: p.name,
@@ -113,18 +134,13 @@ export function PurchasePanel({ p }: { p: PurchaseProduct }) {
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <p className="font-display text-4xl tabular-nums md:text-5xl">{formatPence(unit)}</p>
         <p className="text-ink-soft">{isMetre ? "per metre" : p.saleMode === "roll" ? `per roll${p.rollLength ? ` of ${formatMetres(p.rollLength)}` : ""}` : "each"}</p>
-        {p.tradePricePence != null ? (
-          <p className="w-full text-sm">
-            <span className="mr-3 border-l-2 border-gold-500 pl-2.5 font-medium text-aubergine-700">Your trade price</span>
-            <span className="text-ink-soft">Retail <span className="line-through">{formatPence(p.pricePence)}</span></span>
-          </p>
-        ) : (
-          p.comparePence != null && p.comparePence > p.pricePence && <p className="text-ink-soft line-through">{formatPence(p.comparePence)}</p>
-        )}
+        {p.comparePence != null && p.comparePence > p.pricePence && <p className="text-ink-soft line-through">{formatPence(p.comparePence)}</p>}
       </div>
       <p className="mt-1 text-xs text-stone-500">Prices include VAT</p>
 
-      <StockLine p={p} />
+      {hasColours && <ColourSwatches />}
+
+      <StockLine p={p} colour={selected?.name ?? null} pending={needsColour} />
 
       {p.inStock ? (
         <div className="mt-8 space-y-7">
@@ -251,7 +267,7 @@ export function PurchasePanel({ p }: { p: PurchaseProduct }) {
               </AnimatePresence>
             </button>
             </Magnet>
-            {p.swatchEnabled && <SwatchButton onClick={addSwatch} inCart={hydrated && swatchInCart} full={hydrated && swatchFull} price={p.swatchPricePence} />}
+            {p.swatchEnabled && <SwatchButton onClick={addSwatch} inCart={hydrated && swatchInCart} full={hydrated && swatchFull} price={p.swatchPricePence} colour={selected?.name ?? null} />}
           </div>
 
           <div
@@ -264,7 +280,7 @@ export function PurchasePanel({ p }: { p: PurchaseProduct }) {
           >
             <div className="flex items-center gap-4">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs text-ink-soft">{p.name}</p>
+                <p className="truncate text-xs text-ink-soft">{selected ? `${p.name}, ${selected.name}` : p.name}</p>
                 <p className="font-display text-xl leading-tight tabular-nums">{formatPence(total)}</p>
               </div>
               <button
@@ -280,24 +296,26 @@ export function PurchasePanel({ p }: { p: PurchaseProduct }) {
         </div>
       ) : (
         <div className="mt-8 space-y-4">
-          <StockAlertForm productId={p.id} />
-          {p.swatchEnabled && <SwatchButton onClick={addSwatch} inCart={hydrated && swatchInCart} full={hydrated && swatchFull} price={p.swatchPricePence} />}
+          <StockAlertForm key={selected?.id ?? "product"} productId={p.id} variantId={selected?.id ?? null} colour={selected?.name ?? null} />
+          {p.swatchEnabled && <SwatchButton onClick={addSwatch} inCart={hydrated && swatchInCart} full={hydrated && swatchFull} price={p.swatchPricePence} colour={selected?.name ?? null} />}
         </div>
       )}
     </div>
   );
 }
 
-function StockLine({ p }: { p: PurchaseProduct }) {
-  const [dot, text] = !p.inStock
-    ? ["bg-danger", "Sold out for now"]
+function StockLine({ p, colour, pending }: { p: PurchaseProduct; colour: string | null; pending: boolean }) {
+  const [dot, text] = pending
+    ? ["bg-stone-400", "Choose a colour to see stock"]
+    : !p.inStock
+    ? ["bg-danger", colour ? `${colour} is sold out for now` : "Sold out for now"]
     : p.lowStock
       ? ["bg-gold-500", "Low stock, order soon"]
       : ["bg-success", "In stock, dispatched in 1 to 2 working days"];
   return (
     <p className="mt-6 flex items-center gap-2.5 text-sm">
       <span className="relative flex size-2">
-        {p.inStock && <span className={cn("absolute inline-flex size-full animate-ping rounded-full opacity-50", dot)} />}
+        {p.inStock && !pending && <span className={cn("absolute inline-flex size-full animate-ping rounded-full opacity-50", dot)} />}
         <span className={cn("relative inline-flex size-2 rounded-full", dot)} />
       </span>
       {text}
@@ -305,21 +323,21 @@ function StockLine({ p }: { p: PurchaseProduct }) {
   );
 }
 
-function SwatchButton({ onClick, inCart, full, price }: { onClick: () => void; inCart: boolean; full: boolean; price: number }) {
+function SwatchButton({ onClick, inCart, full, price, colour }: { onClick: () => void; inCart: boolean; full: boolean; price: number; colour: string | null }) {
   return (
     <button type="button" onClick={onClick} disabled={inCart || full} className={btnSecondary}>
       {inCart ? (
-        <><IconCheck className="size-4" /> Swatch in your basket</>
+        <><IconCheck className="size-4" /> {colour ? `${colour} swatch` : "Swatch"} in your basket</>
       ) : full ? (
         <>Swatch limit reached ({MAX_SWATCHES})</>
       ) : (
-        <>{`Order a swatch, ${price > 0 ? formatPence(price) : "free"}`}</>
+        <>{`Order ${colour ? `a ${colour} swatch` : "a swatch"}, ${price > 0 ? formatPence(price) : "free"}`}</>
       )}
     </button>
   );
 }
 
-export function StockAlertForm({ productId }: { productId: string }) {
+export function StockAlertForm({ productId, variantId = null, colour = null }: { productId: string; variantId?: string | null; colour?: string | null }) {
   const [state, action, pending] = useActionState<FormState, FormData>(requestStockAlert, null);
   const id = useId();
   if (state?.ok)
@@ -330,9 +348,10 @@ export function StockAlertForm({ productId }: { productId: string }) {
     );
   return (
     <form action={action} className="border border-stone-300 bg-cream-50 p-5">
-      <p className="flex items-center gap-2 font-medium"><IconMail className="size-4 text-gold-600" strokeWidth={1.5} /> Email me when it&apos;s back</p>
+      <p className="flex items-center gap-2 font-medium"><IconMail className="size-4 text-gold-600" strokeWidth={1.5} /> Email me when {colour ? `${colour} is` : "it's"} back</p>
       <p className="mt-1 text-sm text-ink-soft">One email, the day it&apos;s restocked. Nothing else.</p>
       <input type="hidden" name="productId" value={productId} />
+      {variantId && <input type="hidden" name="variantId" value={variantId} />}
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <label htmlFor={id} className="sr-only">Email address</label>
         <input id={id} name="email" type="email" required autoComplete="email" placeholder="you@example.com" className={inputCls} aria-invalid={state ? !state.ok : undefined} />

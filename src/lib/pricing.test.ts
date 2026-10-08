@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { quote, validateLine, type PricedProduct, type ShippingRate } from "./pricing";
 
 const lining: PricedProduct = {
-  id: "lining", name: "Lining", sale_mode: "metre", price_pence: 495, trade_price_pence: 395,
+  id: "lining", name: "Lining", sale_mode: "metre", price_pence: 495,
   min_length_m: 0.5, length_step_m: 0.5, max_length_m: null, weight_g_per_unit: 180,
   swatch_enabled: true, swatch_price_pence: 0, stock_qty: 10, track_stock: true,
 };
-const roll: PricedProduct = { ...lining, id: "roll", sale_mode: "roll", price_pence: 37500, trade_price_pence: 31000, weight_g_per_unit: 21000, stock_qty: 2 };
-const paper: PricedProduct = { ...lining, id: "paper", sale_mode: "unit", price_pence: 1250, trade_price_pence: null, weight_g_per_unit: 600, stock_qty: 5 };
+const roll: PricedProduct = { ...lining, id: "roll", sale_mode: "roll", price_pence: 37500, weight_g_per_unit: 21000, stock_qty: 2 };
+const paper: PricedProduct = { ...lining, id: "paper", sale_mode: "unit", price_pence: 1250, weight_g_per_unit: 600, stock_qty: 5 };
 
 const rates: ShippingRate[] = [
   { id: "rm-s", name: "RM small", carrier: "royal_mail", min_weight_g: 0, max_weight_g: 2000, price_pence: 495, estimated_days: null },
@@ -16,7 +16,7 @@ const rates: ShippingRate[] = [
   { id: "pf", name: "PF", carrier: "parcelforce", min_weight_g: 30001, max_weight_g: null, price_pence: 2495, estimated_days: null },
 ];
 
-const base = { products: [lining, roll, paper], trade: false, rates, fulfilment: "delivery" as const, discount: null, freeThreshold: 7500, vatRatePct: 20 };
+const base = { products: [lining, roll, paper], rates, fulfilment: "delivery" as const, discount: null, freeThreshold: 7500, vatRatePct: 20 };
 
 describe("validateLine", () => {
   it("enforces min length and step", () => {
@@ -41,11 +41,6 @@ describe("quote", () => {
     expect(q.shipping).toBe(495);
     expect(q.total).toBe(1733);
     expect(q.valid).toBe(true);
-  });
-
-  it("applies trade pricing", () => {
-    const q = quote({ ...base, trade: true, lines: [{ productId: "roll", quantity: 1 }] });
-    expect(q.subtotal).toBe(31000);
   });
 
   it("makes the cheapest service free over the threshold but not faster ones", () => {
@@ -88,5 +83,46 @@ describe("quote", () => {
 
     const reduced = quote({ ...base, vatRatePct: 17.5, fulfilment: "collection", lines: [{ productId: "paper", quantity: 1 }] });
     expect(reduced.vat).toBe(186); // 1250 - 1250/1.175 = 186.17
+  });
+});
+
+describe("colours", () => {
+  const sateen: PricedProduct = {
+    ...lining,
+    id: "sateen",
+    stock_qty: 12,
+    variants: [
+      { id: "ivory", name: "Ivory", stock_qty: 10 },
+      { id: "sage", name: "Sage", stock_qty: 2 },
+    ],
+  };
+  const withColours = { ...base, products: [sateen] };
+
+  it("needs a colour for cut lines but not for swatches", () => {
+    expect(validateLine(sateen, { productId: "sateen", lengthM: 1, quantity: 1 })).toBe("choose_colour");
+    expect(validateLine(sateen, { productId: "sateen", quantity: 1, isSwatch: true })).toBeNull();
+    expect(validateLine(sateen, { productId: "sateen", variantId: "sage", quantity: 1, isSwatch: true })).toBeNull();
+  });
+
+  it("rejects a colour the product doesn't have", () => {
+    expect(validateLine(sateen, { productId: "sateen", variantId: "teal", lengthM: 1, quantity: 1 })).toBe("unavailable");
+    expect(validateLine(lining, { productId: "lining", variantId: "ivory", lengthM: 1, quantity: 1 })).toBe("unavailable");
+  });
+
+  it("checks stock against the chosen colour, not the total", () => {
+    expect(validateLine(sateen, { productId: "sateen", variantId: "sage", lengthM: 3, quantity: 1 })).toBe("out_of_stock");
+    expect(validateLine(sateen, { productId: "sateen", variantId: "ivory", lengthM: 3, quantity: 1 })).toBeNull();
+  });
+
+  it("adds up lines per colour so two cuts can't jointly oversell one", () => {
+    const q = quote({
+      ...withColours,
+      lines: [
+        { productId: "sateen", variantId: "sage", lengthM: 1.5, quantity: 1 },
+        { productId: "sateen", variantId: "sage", lengthM: 1, quantity: 1 },
+        { productId: "sateen", variantId: "ivory", lengthM: 5, quantity: 1 },
+      ],
+    });
+    expect(q.lines.map((l) => l.error)).toEqual([null, "out_of_stock", null]);
   });
 });

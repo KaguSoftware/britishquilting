@@ -21,12 +21,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const { db, viewer } = await staffDb();
   const since = new Date(Date.now() - 30 * 86400_000);
 
-  const [toPack, ready, invoices, products, trade, reviews, paid, recent] = await Promise.all([
+  const [toPack, ready, invoices, products, reviews, paid, recent] = await Promise.all([
     db.from("orders").select("id", { count: "exact", head: true }).in("status", ["paid", "processing"]),
     db.from("orders").select("id", { count: "exact", head: true }).eq("status", "ready_for_collection"),
     db.from("orders").select("id, total_pence").eq("payment_provider", "invoice").is("paid_at", null).not("status", "in", "(cancelled,refunded,pending)"),
     db.from("products").select("id, stock_qty, low_stock_threshold, track_stock, is_active").eq("track_stock", true),
-    db.from("trade_applications").select("id", { count: "exact", head: true }).eq("status", "pending"),
     db.from("reviews").select("id", { count: "exact", head: true }).eq("status", "pending"),
     db.from("orders").select("total_pence, paid_at, status").gte("paid_at", since.toISOString()).not("status", "in", "(cancelled,refunded)"),
     db.from("orders").select("id, number, email, total_pence, status, created_at, shipping_address, fulfilment").not("status", "eq", "pending").order("created_at", { ascending: false }).limit(6),
@@ -52,7 +51,6 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     { label: "Ready for collection", value: ready.count ?? 0, href: "/admin/orders?tab=ready_for_collection", hint: "On the shelf, waiting for the customer" },
     { label: "Awaiting invoice payment", value: invoices.data?.length ?? 0, href: "/admin/orders?tab=invoice_unpaid", hint: invoiceTotal ? `${formatPence(invoiceTotal)} outstanding` : "Nothing outstanding" },
     { label: "Low stock", value: lowStock, href: "/admin/products?filter=low", hint: "At or below the alert level" },
-    { label: "Trade applications", value: trade.count ?? 0, href: "/admin/trade", hint: "Waiting for a decision" },
     { label: "Reviews to approve", value: reviews.count ?? 0, href: "/admin/reviews", hint: "Check before they go live" },
   ];
 

@@ -90,7 +90,7 @@ export function FinanceDashboard({ initial, initialKey }: { initial: State; init
             )}
           </div>
           <div className="space-y-6">
-            <Card title={<><span className="mr-2 text-gold-600">2.</span>Owed to you</>} description="Trade invoices not paid yet">
+            <Card title={<><span className="mr-2 text-gold-600">2.</span>Owed to you</>} description="Invoices not paid yet">
               <UnpaidInvoices invoices={data.unpaid} />
             </Card>
             <Card title={<><span className="mr-2 text-gold-600">3.</span>VAT for this period</>}>
@@ -121,15 +121,12 @@ export function FinanceDashboard({ initial, initialKey }: { initial: State; init
             <Card title="Revenue and profit">
               <RevenueProfitChart buckets={data.buckets} unit={data.unit} />
             </Card>
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-2">
               <Card title="By category">
                 <BarList rows={data.byCategory} />
               </Card>
               <Card title="By payment">
                 <SplitBar slices={data.byMethod} />
-              </Card>
-              <Card title="Trade and retail">
-                <SplitBar slices={data.byChannel} />
               </Card>
             </div>
             <Card title="Best sellers">

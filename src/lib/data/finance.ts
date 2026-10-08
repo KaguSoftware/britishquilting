@@ -53,7 +53,6 @@ export type FinanceData = {
   buckets: Bucket[];
   byCategory: Slice[];
   byMethod: Slice[];
-  byChannel: Slice[];
   topByRevenue: TopProduct[];
   topByQty: TopProduct[];
   invoicedUnpaid: { count: number; total: number };
@@ -62,7 +61,7 @@ export type FinanceData = {
 };
 
 const ORDER_COLS =
-  "id, number, total_pence, vat_included_pence, vat_rate, fee_pence, shipping_pence, discount_pence, payment_provider, paid_at, is_trade, order_items(product_id, name, is_swatch, sale_mode, length_m, quantity, line_total_pence, cost_pence)";
+  "id, number, total_pence, vat_included_pence, vat_rate, fee_pence, shipping_pence, discount_pence, payment_provider, paid_at, order_items(product_id, name, is_swatch, sale_mode, length_m, quantity, line_total_pence, cost_pence)";
 
 /** Supabase caps a select at 1000 rows, so page through. */
 async function all<T>(q: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
@@ -134,7 +133,7 @@ export async function loadSettings(db: SupabaseClient): Promise<FeeSettings> {
 }
 
 const asFinance = (o: OrderRow): FinanceOrder => ({ ...o, items: o.order_items ?? [] });
-const METHOD: Record<string, string> = { stripe: "Card (Stripe)", paypal: "PayPal", invoice: "Trade invoice" };
+const METHOD: Record<string, string> = { stripe: "Card (Stripe)", paypal: "PayPal", invoice: "Invoice" };
 const UNIT: Record<string, string> = { metre: "m", roll: "rolls", unit: "units" };
 
 export async function loadFinance(db: SupabaseClient, period: Period, prev: Period): Promise<FinanceData> {
@@ -206,7 +205,6 @@ export async function loadFinance(db: SupabaseClient, period: Period, prev: Peri
   const categories = new Map((categoriesRes.data ?? []).map((c) => [c.id as string, c.name as string]));
   const cat = new Map<string, Slice>();
   const method = new Map<string, Slice>();
-  const channel = new Map<string, Slice>();
   const prod = new Map<string, TopProduct>();
   const add = (m: Map<string, Slice>, key: string, label: string, v: number) => {
     const s = m.get(key) ?? { key, label, value: 0 };
@@ -215,7 +213,6 @@ export async function loadFinance(db: SupabaseClient, period: Period, prev: Peri
   };
   for (const o of orders) {
     add(method, o.payment_provider ?? "other", METHOD[o.payment_provider ?? ""] ?? "Other", o.total_pence);
-    add(channel, o.is_trade ? "trade" : "retail", o.is_trade ? "Trade" : "Retail", o.total_pence);
     for (const i of o.order_items ?? []) {
       const p = i.product_id ? products.get(i.product_id) : null;
       if (i.is_swatch) {
@@ -256,7 +253,6 @@ export async function loadFinance(db: SupabaseClient, period: Period, prev: Peri
     buckets: [...map.values()],
     byCategory: sorted(cat),
     byMethod: sorted(method),
-    byChannel: sorted(channel),
     topByRevenue: [...tops].sort((a, b) => b.revenue - a.revenue).slice(0, 8),
     topByQty: [...tops].sort((a, b) => b.qty - a.qty).slice(0, 8),
     invoicedUnpaid: { count: invoicedRes.data?.length ?? 0, total: (invoicedRes.data ?? []).reduce((a, o) => a + o.total_pence, 0) },

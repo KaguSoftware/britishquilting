@@ -19,6 +19,16 @@ const imageSchema = z.object({
   alt: z.string().max(300).nullable().optional(),
   width: z.number().int().nullable().optional(),
   height: z.number().int().nullable().optional(),
+  /** the colour this photo shows; null when it's shared by every colour */
+  variant_id: z.uuid().nullable().optional(),
+});
+
+const variantSchema = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1, "Please name every colour").max(80),
+  colour_hex: z.preprocess((v) => (v === "" ? null : v), z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional()),
+  stock_qty: num(),
+  is_active: z.boolean(),
 });
 
 const productSchema = z
@@ -32,7 +42,6 @@ const productSchema = z
     category_id: z.preprocess((v) => (v === "" ? null : v), z.uuid().nullable()),
     sale_mode: z.enum(["metre", "roll", "unit"]),
     price_pence: z.coerce.number().int().min(0, "Please set a price"),
-    trade_price_pence: optInt,
     compare_at_pence: optInt,
     cost_price_pence: optInt.optional(),
     min_length_m: optNum,
@@ -56,7 +65,8 @@ const productSchema = z
     is_featured: z.boolean(),
     seo_title: optText(120),
     seo_description: optText(300),
-    images: z.array(imageSchema).max(30),
+    images: z.array(imageSchema).max(200),
+    variants: z.array(variantSchema).max(40).default([]),
   })
   .superRefine((p, ctx) => {
     if (p.sale_mode === "metre") {
@@ -67,19 +77,28 @@ const productSchema = z
     }
     if (p.sale_mode === "roll" && (!p.roll_length_m || p.roll_length_m <= 0))
       ctx.addIssue({ code: "custom", path: ["roll_length_m"], message: "Please say how many metres are on a roll" });
+    const names = p.variants.map((v) => v.name.toLowerCase());
+    if (new Set(names).size !== names.length) ctx.addIssue({ code: "custom", path: ["variants"], message: "Two colours have the same name" });
+    const ids = new Set(p.variants.map((v) => v.id));
+    if (p.images.some((i) => i.variant_id && !ids.has(i.variant_id)))
+      ctx.addIssue({ code: "custom", path: ["images"], message: "A photo belongs to a colour that was removed" });
+    if (p.images.filter((i) => !i.variant_id).length > 30) ctx.addIssue({ code: "custom", path: ["images"], message: "Up to 30 shared photos" });
+    for (const v of p.variants)
+      if (p.images.filter((i) => i.variant_id === v.id).length > 20)
+        ctx.addIssue({ code: "custom", path: ["images"], message: `Up to 20 photos for ${v.name}` });
   });
 
 export type ProductInput = z.input<typeof productSchema>;
 
-/** When stock goes from nothing to something, tell the people who asked. */
-async function notifyIfRestocked(db: SupabaseClient, productId: string, before: number, after: number) {
+/** When stock goes from nothing to something, tell the people who asked (for one colour, when variantId is given). */
+async function notifyIfRestocked(db: SupabaseClient, productId: string, before: number, after: number, variantId: string | null = null) {
   if (!(before <= 0 && after > 0)) return 0;
-  const { data: waiting } = await db.from("stock_alerts").select("id").eq("product_id", productId).is("notified_at", null);
-  if (!waiting?.length) return 0;
+  let waiting = db.from("stock_alerts").select("id").eq("product_id", productId).is("notified_at", null);
+  waiting = variantId ? waiting.eq("variant_id", variantId) : waiting.is("variant_id", null);
+  const { data } = await waiting;
+  if (!data?.length) return 0;
   try {
-    await sendBackInStock(productId);
-    await db.from("stock_alerts").update({ notified_at: new Date().toISOString() }).eq("product_id", productId).is("notified_at", null);
-    return waiting.length;
+    return await sendBackInStock(productId, variantId);
   } catch (e) {
     console.error("back in stock email", e);
     return 0;
@@ -100,7 +119,7 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check the highlighted fields." };
   }
   const { db, viewer } = await staffDb();
-  const { images, isNew, id, cost_price_pence, ...p } = parsed.data;
+  const { images, variants, isNew, id, cost_price_pence, ...p } = parsed.data;
   const slug = slugify(p.slug || p.name);
   if (!slug) return fail("Please give the product a name");
 
@@ -115,12 +134,15 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
     length_step_m: p.sale_mode === "metre" ? p.length_step_m : null,
     max_length_m: p.sale_mode === "metre" ? p.max_length_m : null,
     roll_length_m: p.sale_mode === "roll" ? p.roll_length_m : null,
+    // With colours, the product's stock is the total of its colours (kept in step by a database trigger).
+    stock_qty: variants.length ? variants.filter((v) => v.is_active).reduce((n, v) => n + v.stock_qty, 0) : p.stock_qty,
     // Cost price is private to the owner; staff saves leave it untouched.
     ...(viewer.role === "owner" && cost_price_pence !== undefined ? { cost_price_pence } : {}),
   };
 
   let before = 0;
   let previousSlug: string | undefined;
+  const { data: oldVariants } = isNew ? { data: [] } : await db.from("product_variants").select("id, stock_qty, is_active").eq("product_id", id);
   if (isNew) {
     const { error } = await db.from("products").insert({ id, ...row });
     if (error) return fail("Couldn't create the product. Please try again.");
@@ -131,6 +153,14 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
     previousSlug = prev.slug;
     const { error } = await db.from("products").update(row).eq("id", id);
     if (error) return fail("Couldn't save the product. Please try again.");
+  }
+
+  // Colours first, so photos can point at new ones.
+  if (variants.length) {
+    const { error } = await db.from("product_variants").upsert(
+      variants.map((v, i) => ({ id: v.id, product_id: id, name: v.name, colour_hex: v.colour_hex ?? null, stock_qty: v.stock_qty, is_active: v.is_active, sort_order: i })),
+    );
+    if (error) return fail("The product saved, but its colours didn't. Please try again.");
   }
 
   // Sync photos: remove the ones taken away, then write the rest in order.
@@ -146,6 +176,7 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
   const rows = images.map((img, i) => ({
     id: byPath.get(img.storage_path) ?? crypto.randomUUID(),
     product_id: id,
+    variant_id: img.variant_id ?? null,
     storage_path: img.storage_path,
     alt: img.alt || null,
     width: img.width ?? null,
@@ -157,7 +188,17 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
     if (error) return fail("The product saved, but the photos didn't. Please try again.");
   }
 
-  const notified = isNew ? 0 : await notifyIfRestocked(db, id, before, Number(p.stock_qty));
+  // Colours taken away go last: their photos were already removed above.
+  const keepVariants = new Set(variants.map((v) => v.id));
+  const goneVariants = (oldVariants ?? []).filter((v) => !keepVariants.has(v.id)).map((v) => v.id);
+  if (goneVariants.length) await db.from("product_variants").delete().in("id", goneVariants);
+
+  let notified = 0;
+  if (!isNew) {
+    notified += await notifyIfRestocked(db, id, before, Number(row.stock_qty));
+    const was = new Map((oldVariants ?? []).map((v) => [v.id, v.is_active ? Number(v.stock_qty) : 0]));
+    for (const v of variants) if (v.is_active) notified += await notifyIfRestocked(db, id, was.get(v.id) ?? 0, v.stock_qty, v.id);
+  }
   await audit(db, viewer.id, isNew ? "product.create" : "product.update", "product", id, { name: p.name });
   refresh(id, slug);
   if (previousSlug && previousSlug !== slug) revalidateTag(`product:${previousSlug}`, { expire: 0 });
@@ -183,6 +224,8 @@ export async function updateStock(id: string, qty: number): Promise<ActionResult
   const { db, viewer } = await staffDb();
   const { data: prev } = await db.from("products").select("stock_qty, slug").eq("id", id).maybeSingle();
   if (!prev) return fail("This product no longer exists.");
+  const { count: colours } = await db.from("product_variants").select("id", { count: "exact", head: true }).eq("product_id", id);
+  if (colours) return fail("This product is sold in colours. Set the stock for each colour instead.");
   const before = Number(prev.stock_qty);
   const { error } = await db.from("products").update({ stock_qty: qty }).eq("id", id);
   if (error) return fail("Couldn't update the stock.");
@@ -190,6 +233,26 @@ export async function updateStock(id: string, qty: number): Promise<ActionResult
   await audit(db, viewer.id, "product.stock", "product", id, { from: before, to: qty });
   refresh(id, prev.slug);
   return ok({ previous: before }, `Stock updated${notified ? `. ${notified} waiting ${notified === 1 ? "customer" : "customers"} emailed` : ""}.`);
+}
+
+export async function updateVariantStock(variantId: string, qty: number): Promise<ActionResult<{ previous: number }>> {
+  const parsed = z.object({ id: z.uuid(), qty: z.number().min(0).max(1_000_000) }).safeParse({ id: variantId, qty });
+  if (!parsed.success) return fail("Please enter a stock amount of 0 or more.");
+  const { db, viewer } = await staffDb();
+  const { data: prev } = await db.from("product_variants").select("stock_qty, name, product_id, products(slug)").eq("id", variantId).maybeSingle();
+  if (!prev) return fail("This colour no longer exists.");
+  const before = Number(prev.stock_qty);
+  const { data: product } = await db.from("products").select("stock_qty").eq("id", prev.product_id).maybeSingle();
+  const totalBefore = Number(product?.stock_qty ?? 0);
+  const { error } = await db.from("product_variants").update({ stock_qty: qty }).eq("id", variantId);
+  if (error) return fail("Couldn't update the stock.");
+  const { data: after } = await db.from("products").select("stock_qty").eq("id", prev.product_id).maybeSingle();
+  const notified =
+    (await notifyIfRestocked(db, prev.product_id, before, qty, variantId)) +
+    (await notifyIfRestocked(db, prev.product_id, totalBefore, Number(after?.stock_qty ?? 0)));
+  await audit(db, viewer.id, "product.stock", "product", prev.product_id, { colour: prev.name, from: before, to: qty });
+  refresh(prev.product_id, (prev.products as unknown as { slug: string } | null)?.slug);
+  return ok({ previous: before }, `${prev.name} stock updated${notified ? `. ${notified} waiting ${notified === 1 ? "customer" : "customers"} emailed` : ""}.`);
 }
 
 export async function deleteProduct(id: string): Promise<ActionResult> {

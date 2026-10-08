@@ -8,10 +8,7 @@ import { lineErrorMessage } from "@/lib/pricing";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getStripe, stripeConfigured } from "@/lib/stripe";
 import { createPayPalOrder, paypalConfigured } from "@/lib/paypal";
-import { addDays, cartFingerprint, isUkPhone, isValidUkPostcode, normalisePostcode } from "@/lib/checkout/helpers";
-import { afterCommit } from "@/lib/checkout/finalise";
-import { sendInvoiceOrder } from "@/lib/email";
-import { revalidateStorefront } from "@/lib/orders/revalidate";
+import { cartFingerprint, isUkPhone, isValidUkPostcode, normalisePostcode } from "@/lib/checkout/helpers";
 
 const text = (max: number) => z.string().trim().max(max);
 
@@ -27,7 +24,7 @@ const addressSchema = z.object({
 
 const checkoutSchema = quoteInputSchema.extend({
   email: z.email("Please enter a valid email address.").max(200),
-  provider: z.enum(["stripe", "paypal", "invoice"]),
+  provider: z.enum(["stripe", "paypal"]),
   contactName: text(120).min(2, "Please enter your name."),
   contactPhone: text(30).refine((v) => v === "" || isUkPhone(v), "Please enter a UK phone number.").optional().default(""),
   address: addressSchema.nullish(),
@@ -42,7 +39,7 @@ export type CreateOrderResult =
       number: number;
       total: number;
       successUrl: string;
-      provider: "stripe" | "paypal" | "invoice";
+      provider: "stripe" | "paypal";
       clientSecret?: string;
       paypalOrderId?: string;
     }
@@ -118,7 +115,6 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
     }
     if (q.total <= 0) return { ok: false, error: "There's nothing to pay for this order. Please contact us to complete it." };
 
-    if (input.provider === "invoice" && !viewer?.isTrade) return { ok: false, error: "Pay by invoice is only available to approved trade accounts." };
     if (input.provider === "stripe" && !stripeConfigured()) return { ok: false, error: "Card payments are temporarily unavailable. Please try PayPal." };
     if (input.provider === "paypal" && !paypalConfigured()) return { ok: false, error: "PayPal is temporarily unavailable. Please pay by card." };
 
@@ -137,7 +133,7 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
           email,
           address,
           total: q.total,
-        }) + `|${viewer?.id ?? "guest"}|${input.provider === "invoice" ? "inv" : "pay"}`,
+        }) + `|${viewer?.id ?? "guest"}|pay`,
       )
       .digest("base64url")
       .slice(0, 32);
@@ -148,7 +144,7 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
     type OpenOrder = { id: string; number: number; access_token: string; total_pence: number; vat_included_pence: number; payment_provider: string | null; payment_ref: string | null };
     let order: OpenOrder | null = null;
     const attempt = await readAttempt();
-    if (attempt && attempt.hash === hash && input.provider !== "invoice") {
+    if (attempt && attempt.hash === hash) {
       const { data } = await db
         .from("orders")
         .select("id, number, access_token, total_pence, vat_included_pence, payment_provider, payment_ref, status, email, user_id")
@@ -169,16 +165,15 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
 
     if (!order) {
       const ids = [...new Set(input.lines.map((l) => l.productId))];
-      const { data: meta } = await db.from("products").select("id, name, subtitle, product_images(storage_path, sort_order)").in("id", ids);
+      const { data: meta } = await db.from("products").select("id, name, subtitle, product_images(storage_path, sort_order, variant_id)").in("id", ids);
       const metaById = new Map((meta ?? []).map((m) => [m.id, m]));
-      const isInvoice = input.provider === "invoice";
 
       const { data: created, error } = await db
         .from("orders")
         .insert({
           user_id: viewer?.id ?? null,
           email,
-          status: isInvoice ? "processing" : "awaiting_payment",
+          status: "awaiting_payment",
           payment_provider: input.provider,
           fulfilment: input.fulfilment,
           shipping_address: address,
@@ -192,8 +187,6 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
           vat_included_pence: q.vat,
           vat_rate: q.vatRate,
           discount_code: discount?.code ?? null,
-          is_trade: Boolean(viewer?.isTrade),
-          invoice_due_at: isInvoice ? addDays(new Date(), settings.invoice_terms_days ?? 30).toISOString() : null,
           customer_note: input.note || null,
         })
         .select("id, number, access_token, total_pence, vat_included_pence, payment_provider, payment_ref")
@@ -202,12 +195,19 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
 
       const items = q.lines.map((l) => {
         const m = metaById.get(l.line.productId);
-        const imgs = ((m?.product_images ?? []) as { storage_path: string; sort_order: number }[]).sort((a, b) => a.sort_order - b.sort_order);
+        const variant = l.product!.variants?.find((v) => v.id === l.line.variantId) ?? null;
+        const rank = (i: { variant_id: string | null }) => (variant && i.variant_id === variant.id ? 0 : i.variant_id == null ? 1 : 2);
+        const imgs = ((m?.product_images ?? []) as { storage_path: string; sort_order: number; variant_id: string | null }[]).sort(
+          (a, b) => rank(a) - rank(b) || a.sort_order - b.sort_order,
+        );
         const baseName = m?.name ?? l.product!.name;
+        // The colour goes in the name too, so every order screen, email and packing list shows it.
         return {
           order_id: created.id,
           product_id: l.line.productId,
-          name: m?.subtitle ? `${baseName}, ${m.subtitle}` : baseName,
+          variant_id: variant?.id ?? null,
+          variant_name: variant?.name ?? null,
+          name: [baseName, variant?.name, m?.subtitle].filter(Boolean).join(", "),
           image_path: imgs[0]?.storage_path ?? null,
           sale_mode: l.product!.sale_mode,
           is_swatch: Boolean(l.line.isSwatch),
@@ -222,35 +222,12 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
         await db.from("orders").delete().eq("id", created.id);
         throw itemsError;
       }
-      if (input.provider === "invoice") {
-        // Reserve stock atomically (row locks, all or nothing) before the order is confirmed.
-        const { error: stockError } = await db.rpc("reserve_order_stock", { p_order_id: created.id });
-        if (stockError) {
-          await db.from("orders").delete().eq("id", created.id);
-          if (stockError.message?.includes("insufficient_stock"))
-            return { ok: false, error: "Sorry, some items in your basket have just sold out. Please review your basket.", requote: true };
-          throw stockError;
-        }
-      }
       await db.from("order_events").insert({
         order_id: created.id,
         kind: "created",
-        message: isInvoice ? "Order placed on trade account" : "Order created, awaiting payment",
+        message: "Order created, awaiting payment",
         data: { provider: input.provider, total_pence: q.total },
       });
-
-      if (isInvoice) {
-        await db.from("order_events").insert({
-          order_id: created.id,
-          kind: "status",
-          message: `Invoice issued, due in ${settings.invoice_terms_days ?? 30} days`,
-          data: { status: "processing" },
-        });
-        await afterCommit(created.id, discount?.code ?? null, email);
-        revalidateStorefront(); // stock was reserved and the discount use counted inside reserve_order_stock
-        await sendInvoiceOrder(created.id);
-        return { ok: true, orderId: created.id, number: created.number, total: q.total, provider: "invoice", successUrl: successUrl(created) };
-      }
 
       order = created;
       await writeAttempt(created.id, hash);

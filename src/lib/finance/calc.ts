@@ -201,7 +201,6 @@ export type FinanceOrder = {
   discount_pence: number;
   payment_provider: string | null;
   paid_at: string;
-  is_trade: boolean;
   items: FinanceItem[];
   /** Fee actually charged when this order was paid, frozen at that time. Null for orders that predate the snapshot. */
   fee_pence?: number | null;

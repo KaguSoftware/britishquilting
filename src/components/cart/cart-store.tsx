@@ -11,6 +11,8 @@ export type CartItem = CartLine & {
   slug: string;
   image?: string | null;
   saleMode: SaleMode;
+  /** colour name shown with the line, for products sold in several colours */
+  variantName?: string | null;
   /** display-only snapshot, refreshed by the server quote */
   unitPricePence: number;
 };
@@ -30,8 +32,17 @@ type CartCtx = {
 const Ctx = createContext<CartCtx | null>(null);
 const STORAGE_KEY = "bq-cart-v1";
 
-const keyOf = (i: Pick<CartItem, "productId" | "lengthM" | "isSwatch">) =>
-  `${i.productId}:${i.isSwatch ? "swatch" : (i.lengthM ?? "u")}`;
+const keyOf = (i: Pick<CartItem, "productId" | "variantId" | "lengthM" | "isSwatch">) =>
+  `${i.productId}:${i.variantId ?? "-"}:${i.isSwatch ? "swatch" : (i.lengthM ?? "u")}`;
+
+/** The cart line as the server prices it. */
+export const toLine = ({ productId, variantId, lengthM, quantity, isSwatch }: CartItem): CartLine => ({ productId, variantId, lengthM, quantity, isSwatch });
+
+/** Finds an item's line in a server quote. */
+export const sameLine = (
+  i: Pick<CartItem, "productId" | "variantId" | "lengthM" | "isSwatch">,
+  l: { productId: string; variantId: string | null; lengthM?: number; isSwatch: boolean },
+) => l.productId === i.productId && (l.variantId ?? null) === (i.variantId ?? null) && l.isSwatch === Boolean(i.isSwatch) && (i.isSwatch || l.lengthM === i.lengthM);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -41,13 +52,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setItems(JSON.parse(raw));
+      if (raw) setItems((JSON.parse(raw) as CartItem[]).map((i) => ({ ...i, key: keyOf(i) })));
     } catch {}
     setHydrated(true);
     // keep tabs in sync
     const onStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) {
-        try { setItems(e.newValue ? JSON.parse(e.newValue) : []); } catch {}
+        try { setItems(e.newValue ? (JSON.parse(e.newValue) as CartItem[]).map((i) => ({ ...i, key: keyOf(i) })) : []); } catch {}
       }
     };
     window.addEventListener("storage", onStorage);
@@ -64,7 +75,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const key = keyOf(item);
       const existing = prev.find((p) => p.key === key);
       if (existing) {
-        if (item.isSwatch) return prev; // one swatch per fabric
+        if (item.isSwatch) return prev; // one swatch per fabric colour
         return prev.map((p) => (p.key === key ? { ...p, quantity: p.quantity + item.quantity } : p));
       }
       return [...prev, { ...item, key }];

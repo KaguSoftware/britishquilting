@@ -11,7 +11,7 @@ const cell = (v: unknown) => {
 };
 const money = (p: number) => (p / 100).toFixed(2);
 const day = (iso: string) => ymdToIso(londonDay(new Date(iso)));
-const METHOD: Record<string, string> = { stripe: "Card (Stripe)", paypal: "PayPal", invoice: "Trade invoice" };
+const METHOD: Record<string, string> = { stripe: "Card (Stripe)", paypal: "PayPal", invoice: "Invoice" };
 
 function csv(rows: unknown[][], name: string) {
   return new Response("﻿" + rows.map((r) => r.map(cell).join(",")).join("\r\n"), {
@@ -37,7 +37,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       : { data: [] as { id: string; number: number }[] };
     const numbers = new Map((refundOrders ?? []).map((o) => [o.id, o.number]));
     const rows: unknown[][] = [
-      ["Type", "Date", "Order", "Paid by", "Customer type", "Gross", "VAT", "Net of VAT", "Postage", "Discount", "Fee", "Cost of goods", "Lines without cost (cost of goods understated)"],
+      ["Type", "Date", "Order", "Paid by", "Gross", "VAT", "Net of VAT", "Postage", "Discount", "Fee", "Cost of goods", "Lines without cost (cost of goods understated)"],
     ];
     for (const o of orders) {
       const c = orderCogs(o.order_items ?? [], o.vat_rate ?? 20);
@@ -46,7 +46,6 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
         day(o.paid_at),
         o.number,
         METHOD[o.payment_provider ?? ""] ?? o.payment_provider ?? "",
-        o.is_trade ? "Trade" : "Retail",
         money(o.total_pence),
         money(o.vat_included_pence),
         money(o.total_pence - o.vat_included_pence),
@@ -58,7 +57,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       ]);
     }
     for (const r of refunds) {
-      rows.push(["Refund", day(r.created_at), numbers.get(r.order_id) ?? "", "", "", money(-r.amount_pence), money(-r.vat_pence), money(-(r.amount_pence - r.vat_pence)), "", "", "", "", ""]);
+      rows.push(["Refund", day(r.created_at), numbers.get(r.order_id) ?? "", "", money(-r.amount_pence), money(-r.vat_pence), money(-(r.amount_pence - r.vat_pence)), "", "", "", "", ""]);
     }
     return csv(rows, `british-quilting-orders-${tag}.csv`);
   }

@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { createAdminClient } from "@/lib/supabase/server";
 import { siteUrl } from "@/lib/utils";
 
-const STATIC = ["", "/shop", "/samples", "/trade", "/about", "/contact", "/faq", "/journal", "/help/delivery", "/help/returns", "/legal/terms", "/legal/privacy", "/track"];
+const STATIC = ["", "/shop", "/samples", "/about", "/contact", "/faq", "/journal", "/help/delivery", "/help/returns", "/legal/terms", "/legal/privacy", "/track"];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const db = createAdminClient();

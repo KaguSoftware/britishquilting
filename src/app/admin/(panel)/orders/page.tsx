@@ -27,7 +27,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: SP })
   let rowsQuery = db
     .from("orders")
     .select(
-      "id, number, email, status, total_pence, created_at, fulfilment, payment_provider, paid_at, shipping_address, shipping_name, is_trade, customer_note, order_items(name, length_m, quantity, sale_mode, is_swatch)",
+      "id, number, email, status, total_pence, created_at, fulfilment, payment_provider, paid_at, shipping_address, shipping_name, customer_note, order_items(name, length_m, quantity, sale_mode, is_swatch)",
     )
     .order("created_at", { ascending: tabKey === "to_pack" })
     .range(offset, offset + PAGE_SIZE - 1);
@@ -145,7 +145,6 @@ export default async function OrdersPage({ searchParams }: { searchParams: SP })
                       <span className="font-medium">{o.shipping_address?.full_name ?? o.email}</span>
                       <span className="block text-xs text-stone-500">
                         {o.fulfilment === "collection" ? "Collecting in person" : o.shipping_name ?? "Delivery"}
-                        {o.is_trade ? " · Trade" : ""}
                         {o.payment_provider === "invoice" ? (o.paid_at ? " · Invoice paid" : " · On invoice") : ""}
                       </span>
                     </td>

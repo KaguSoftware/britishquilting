@@ -3,7 +3,7 @@ import { Accordion, ContentLayout, HelpAside, PageHeader } from "@/components/sh
 
 export const metadata: Metadata = {
   title: "Frequently asked questions",
-  description: "Answers on cutting, lengths, swatches, delivery, returns and trade accounts at British Quilting.",
+  description: "Answers on cutting, lengths, swatches, delivery, and returns at British Quilting.",
   alternates: { canonical: "/faq" },
 };
 
@@ -14,7 +14,7 @@ const FAQ: { section: string; items: [string, string][] }[] = [
       ["What's the minimum length I can order?", "Most fabrics start at 50cm and go up in 50cm steps. The exact minimum and step are shown on each product page, and the price updates as you change the length."],
       ["What does 'pieces' mean?", "If you need several drops of the same length, set the length once and increase the pieces. We cut each piece separately, which saves you cutting them at home."],
       ["How much lining do I need?", "As a rule, lining matches your curtain fabric length less the hems, and interlining is similar. If you send us your window sizes we're happy to help you work it out."],
-      ["Can I order a full roll?", "Yes. Several fabrics are sold by the full roll at a lower price per metre. Trade customers can order any fabric by the roll."],
+      ["Can I order a full roll?", "Yes. Several fabrics are sold by the full roll at a lower price per metre."],
     ],
   },
   {
@@ -30,13 +30,6 @@ const FAQ: { section: string; items: [string, string][] }[] = [
       ["How quickly will my order arrive?", "Orders are usually cut and dispatched within one to two working days, tracked. Delivery time depends on the service chosen at checkout."],
       ["Can I collect?", "Yes. Choose collection at checkout and we'll email you when it's ready at our London premises."],
       ["Can I return cut fabric?", "Cut-to-order fabric can't be returned unless it's faulty or cut incorrectly. Uncut items can be returned within 14 days."],
-    ],
-  },
-  {
-    section: "Trade",
-    items: [
-      ["Who can open a trade account?", "Curtain makers, upholsterers, interior designers, theatre and film workrooms, and other soft furnishing businesses."],
-      ["Do trade accounts get invoice terms?", "Approved accounts can pay by invoice on 30-day terms. We'll confirm this when we approve your account."],
     ],
   },
 ];

@@ -16,17 +16,22 @@ export type ProductCardData = {
   colour_hex: string | null;
   rating_avg: number;
   rating_count: number;
-  product_images?: { storage_path: string; alt: string | null; sort_order: number }[];
+  product_images?: { storage_path: string; alt: string | null; sort_order: number; variant_id?: string | null }[];
+  /** the colours it comes in, when sold in more than one */
+  variants?: { id: string; name: string; colour_hex: string | null; in_stock: boolean }[];
 };
 
 const unitLabel = { metre: "/ metre", roll: "/ roll", unit: "" } as const;
 
-export function ProductCard({ p, sizes = "(min-width: 768px) 25vw, 50vw" }: { p: ProductCardData; sizes?: string }) {
+const MAX_DOTS = 5;
+
+export function ProductCard({ p, sizes = "(min-width: 1024px) 20vw, (min-width: 768px) 25vw, 50vw" }: { p: ProductCardData; sizes?: string }) {
   const imgs = [...(p.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
   const [first, second] = imgs;
+  const colours = p.variants ?? [];
   return (
     <Link href={`/product/${p.slug}`} className="group block">
-      <div className="relative aspect-[4/5] overflow-hidden bg-cream-200">
+      <div className="relative aspect-[2/3] overflow-hidden bg-cream-200">
         {first ? (
           <>
             <Image
@@ -47,7 +52,7 @@ export function ProductCard({ p, sizes = "(min-width: 768px) 25vw, 50vw" }: { p:
             )}
           </>
         ) : (
-          <FabricPlaceholder hex={p.colour_hex} name={p.name} />
+          <FabricPlaceholder hex={colours[0]?.colour_hex ?? p.colour_hex} name={p.name} />
         )}
         {!p.in_stock && (
           <span className="absolute left-3 top-3 bg-cream-50 px-2 py-0.5 font-serif text-sm italic text-ink">Sold out</span>
@@ -58,7 +63,7 @@ export function ProductCard({ p, sizes = "(min-width: 768px) 25vw, 50vw" }: { p:
       </div>
       <div className="mt-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="font-display truncate text-xl leading-tight md:text-2xl">{p.name}</h3>
+          <h3 className="font-display truncate text-lg leading-tight md:text-xl">{p.name}</h3>
           {p.subtitle && <p className="mt-0.5 truncate text-sm text-ink-soft">{p.subtitle}</p>}
         </div>
         {p.rating_count > 0 && (
@@ -74,6 +79,21 @@ export function ProductCard({ p, sizes = "(min-width: 768px) 25vw, 50vw" }: { p:
           <span className="ml-2 text-ink-soft line-through">{formatPence(p.compare_at_pence)}</span>
         )}
       </p>
+      {colours.length > 1 && (
+        <p className="mt-2.5 flex items-center gap-2 text-xs text-ink-soft">
+          <span className="flex -space-x-0.5" aria-hidden>
+            {colours.slice(0, MAX_DOTS).map((c) => (
+              <span
+                key={c.id}
+                title={c.name}
+                className={`size-3.5 rounded-full border border-ink/20 ring-1 ring-cream-100 ${c.in_stock ? "" : "opacity-40"}`}
+                style={{ background: c.colour_hex ?? "transparent" }}
+              />
+            ))}
+          </span>
+          {colours.length} colours
+        </p>
+      )}
     </Link>
   );
 }

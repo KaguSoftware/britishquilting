@@ -34,7 +34,7 @@ export function LoginForm({ next, initialError, notice }: { next: string; initia
   return (
     <div>
       <AuthHeading eyebrow="Welcome back" title="Sign in">
-        Track orders, reorder your usual linings and manage your trade account.
+        Track orders, reorder your usual linings and manage your account.
       </AuthHeading>
 
       {notice && <FormMessage tone="success" className="mb-6">{notice}</FormMessage>}

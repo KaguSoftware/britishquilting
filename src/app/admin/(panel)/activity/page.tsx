@@ -34,8 +34,6 @@ const LABELS: Record<string, string> = {
   "category.update": "edited a category",
   "category.delete": "deleted a category",
   "category.reorder": "reordered categories",
-  "trade.approve": "approved a trade application",
-  "trade.reject": "declined a trade application",
   "staff.promote": "gave someone back office access",
   "staff.remove": "removed someone's back office access",
   "discount.create": "created a discount code",

@@ -18,8 +18,25 @@ export type HeroCategory = { slug: string; name: string; blurb: string };
 const CHAPTERS = [
   { eyebrow: "Linings", title: "Cotton sateen, cut to the centimetre.", body: "The quiet layer behind every beautiful curtain: soft hand, clean fall, colour-fast." },
   { eyebrow: "Interlinings", title: "Bump & domette for a fuller drape.", body: "Warmth, weight and that heavy, luxurious fold that only proper interlining gives." },
-  { eyebrow: "For the trade", title: "Trusted by London workrooms since 1990.", body: "Trade pricing, full rolls and pay-on-invoice for curtain makers and upholsterers." },
+  { eyebrow: "Workrooms", title: "Trusted by London workrooms since 1990.", body: "Full rolls and cut-to-order lengths for curtain makers and upholsterers." },
 ];
+
+// The chapter stretch of the story (in timeline progress) gets STRETCH x more
+// scroll than the rest, so the copy stays up long enough to read.
+const CHAPTER_SPAN = [0.36, 0.78] as const;
+const STRETCH = 2;
+const SCROLL_SCALE = 1 + (CHAPTER_SPAN[1] - CHAPTER_SPAN[0]) * (STRETCH - 1);
+// Base length was 420vh of scroll for the whole story, plus the pinned viewport.
+const HERO_HEIGHT = `${Math.round(100 + 420 * SCROLL_SCALE)}vh`;
+
+/** Raw scroll progress (0..1) → story progress (0..1), slowed through the chapters. */
+function storyProgress(x: number) {
+  const [a, b] = CHAPTER_SPAN;
+  const u = x * SCROLL_SCALE;
+  if (u < a) return u;
+  if (u < a + (b - a) * STRETCH) return a + (u - a) / STRETCH;
+  return Math.min(1, u - (b - a) * (STRETCH - 1));
+}
 
 function supportsWebGL() {
   try {
@@ -46,15 +63,18 @@ export function Hero({ categories }: { categories: HeroCategory[] }) {
   useEffect(() => {
     if (mode !== "webgl" || !root.current) return;
     const ctx = gsap.context(() => {
-      const tl = gsap.timeline({
-        defaults: { ease: "none" },
-        scrollTrigger: {
-          trigger: root.current,
-          start: "top top",
-          end: "bottom bottom",
-          scrub: true,
-          onUpdate: (st) => { progress.current = st.progress; },
-        },
+      const tl = gsap.timeline({ defaults: { ease: "none" }, paused: true });
+      const sync = (st: ScrollTrigger) => {
+        const p = storyProgress(st.progress);
+        progress.current = p;
+        tl.progress(p);
+      };
+      ScrollTrigger.create({
+        trigger: root.current,
+        start: "top top",
+        end: "bottom bottom",
+        onUpdate: sync,
+        onRefresh: sync,
       });
       // Timeline spans 0 → 1 so positions read as scroll progress.
       tl.to("[data-hero-intro]", { opacity: 0, y: -60, filter: "blur(6px)", duration: 0.14 }, 0.06)
@@ -80,7 +100,7 @@ export function Hero({ categories }: { categories: HeroCategory[] }) {
   if (mode === "static") return <StaticHero categories={categories} />;
 
   return (
-    <section ref={root} data-hero aria-label="British Quilting" className="relative h-[520vh] bg-aubergine-950 text-cream-50">
+    <section ref={root} data-hero aria-label="British Quilting" className="relative bg-aubergine-950 text-cream-50" style={{ height: HERO_HEIGHT }}>
       <div className="sticky top-0 h-svh overflow-hidden">
         {/* backdrop */}
         <div
@@ -95,10 +115,12 @@ export function Hero({ categories }: { categories: HeroCategory[] }) {
           }}
         />
 
-        {/* poster: painted immediately, cross-fades to the live scene */}
+        {/* poster: painted immediately, cross-fades to the live scene. Sits where the
+            3D bolt actually rests (below centre), not dead centre, so it never
+            overlaps the headline while it fades. */}
         <div
           aria-hidden
-          className="absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ease-(--ease-silk)"
+          className="absolute inset-x-0 top-[66%] flex -translate-y-1/2 items-center justify-center transition-opacity duration-1000 ease-(--ease-silk)"
           style={{ opacity: sceneReady ? 0 : 1 }}
         >
           <div className="h-[9vh] w-[62vw] max-w-[640px] rounded-full bg-[linear-gradient(180deg,#f6eedb,#d8c7a6_55%,#a8946f)] shadow-[0_40px_80px_-20px_rgba(0,0,0,.6)]" />

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader, EmptyState, btnSecondary } from "@/components/shop/bits";
 import { SwatchCard, SwatchCounter } from "@/components/shop/swatch-card";
+import { photosFor } from "@/lib/photos";
 import { Reveal } from "@/components/site/reveal";
 import { getCategories, getListProducts } from "@/lib/data/shop";
 import { MAX_SWATCHES } from "@/lib/pricing";
@@ -58,29 +59,32 @@ export default async function SamplesPage() {
                   {c.description && <p className="text-ink-soft md:text-right">{c.description}</p>}
                 </Reveal>
                 <ul className="mt-10 grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-3 md:gap-x-6 lg:grid-cols-5">
-                  {items.map((p, i) => {
-                    const idx = n++;
-                    const img = [...(p.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order)[0];
-                    return (
-                      <Reveal as="li" key={p.id} delay={(i % 5) * 0.05}>
-                        <SwatchCard
-                          index={idx}
-                          p={{
-                            id: p.id,
-                            slug: p.slug,
-                            name: p.name,
-                            subtitle: p.subtitle,
-                            colour_hex: p.colour_hex,
-                            composition: p.composition,
-                            width_cm: p.width_cm,
-                            sale_mode: p.sale_mode,
-                            swatch_price_pence: p.swatch_price_pence,
-                            image: img ? storageUrl(img.storage_path) : null,
-                          }}
-                        />
-                      </Reveal>
-                    );
-                  })}
+                  {items
+                    .flatMap((p) => (p.variants?.length ? p.variants : [null]).map((v) => ({ p, v })))
+                    .map(({ p, v }, i) => {
+                      const idx = n++;
+                      const img = photosFor(p.product_images ?? [], v?.id ?? null)[0];
+                      return (
+                        <Reveal as="li" key={`${p.id}:${v?.id ?? ""}`} delay={(i % 5) * 0.05}>
+                          <SwatchCard
+                            index={idx}
+                            p={{
+                              id: p.id,
+                              slug: p.slug,
+                              name: p.name,
+                              subtitle: p.subtitle,
+                              colour_hex: v ? v.colour_hex : p.colour_hex,
+                              composition: p.composition,
+                              width_cm: p.width_cm,
+                              sale_mode: p.sale_mode,
+                              swatch_price_pence: p.swatch_price_pence,
+                              image: img ? storageUrl(img.storage_path) : null,
+                              variant: v ? { id: v.id, name: v.name } : null,
+                            }}
+                          />
+                        </Reveal>
+                      );
+                    })}
                 </ul>
               </section>
             ))}
@@ -91,7 +95,7 @@ export default async function SamplesPage() {
           {[
             ["How big are they?", "Each swatch is roughly 15 by 15cm, cut from the same bolts we cut your order from, so colour and weight match exactly."],
             ["Is there a catch?", `None. Up to ${MAX_SWATCHES} per order, and you can add them alongside fabric. Swatches ship free even on their own.`],
-            ["Need more than six?", "Trade customers and workrooms can request a full sample book. Just ask us and tell us about the project."],
+            ["Need more than six?", "Workrooms can request a full sample book. Just ask us and tell us about the project."],
           ].map(([t, d]) => (
             <div key={t}>
               <h3 className="font-display text-2xl">{t}</h3>

@@ -37,7 +37,7 @@ export default function TermsPage() {
           <h2>3. Prices and payment</h2>
           <p>
             Prices are shown in pounds sterling and include VAT at the current rate. Delivery is charged separately and shown before you pay. Payment is taken
-            by card or PayPal when you order, or by invoice for approved trade accounts.
+            by card or PayPal when you order.
           </p>
           <h2>4. Cut-to-order goods</h2>
           <p>
@@ -53,12 +53,7 @@ export default function TermsPage() {
           <p>
             Delivery times are estimates. Risk passes to you on delivery or collection. See <Link href="/help/delivery">delivery &amp; collection</Link> for details.
           </p>
-          <h2>7. Trade accounts</h2>
-          <p>
-            Trade accounts are offered at our discretion. Invoices are payable within the agreed terms. We may withdraw trade pricing or credit terms if
-            invoices are overdue.
-          </p>
-          <h2>8. Liability</h2>
+          <h2>7. Liability</h2>
           <p>
             Nothing in these terms limits our liability for death or personal injury caused by negligence, fraud, or anything else that can&apos;t legally be
             limited. Otherwise our liability is limited to the price of the goods concerned. We are not liable for losses that were not foreseeable.
