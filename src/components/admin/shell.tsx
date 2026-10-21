@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  IconBolt, IconChart, IconChevronLeft, IconChevronRight, IconClock, IconClose, IconCrown, IconDocument, IconExternal, IconHome, IconLock, IconLogout,
+  IconBolt, IconChart, IconChevronLeft, IconChevronRight, IconClock, IconClose, IconCrown, IconDeliveryNote, IconDocument, IconExternal, IconHome, IconLock, IconLogout,
   IconMail, IconMenu, IconOffer, IconParcel, IconPencil, IconSearch, IconSettings, IconStar, IconSwatch, IconTag, IconUsers, IconVan,
 } from "@/components/icons";
 import { createClient } from "@/lib/supabase/client";
@@ -25,6 +25,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
       { href: "/admin", label: "Today", icon: IconHome },
       { href: "/admin/orders", label: "Orders", icon: IconParcel, count: "toPack" },
       { href: "/admin/invoices", label: "Invoices", icon: IconDocument },
+      { href: "/admin/delivery-notes", label: "Delivery notes", icon: IconDeliveryNote },
     ],
   },
   {

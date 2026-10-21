@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { IconPlus, IconUsers } from "@/components/icons";
+import { IconChevronLeft, IconChevronRight, IconPlus, IconUsers } from "@/components/icons";
 import { staffDb } from "@/lib/actions/admin/guard";
 import { CUSTOMER_COLS } from "@/lib/data/invoices";
 import type { ManualCustomer } from "@/lib/invoices";
@@ -11,7 +11,7 @@ import { CustomerBook } from "@/components/admin/customers/customer-book";
 
 export const metadata = { title: "Customers" };
 
-export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; sort?: string; view?: string; add?: string }> }) {
+export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; sort?: string; view?: string; add?: string; page?: string }> }) {
   const sp = await searchParams;
   const q = (sp.q ?? "").trim().replace(/[%,()]/g, "");
   const manual = sp.view === "manual";
@@ -44,18 +44,44 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   );
 
   if (manual) {
-    let query = db.from("manual_customers").select(CUSTOMER_COLS).order("full_name").limit(1000);
-    if (q) query = query.or(`full_name.ilike.%${q}%,company.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
-    const customers = ((await query).data ?? []) as ManualCustomer[];
+    const PAGE_SIZE = 100;
+    const page = Math.max(1, Math.trunc(Number(sp.page)) || 1);
+    let query = db
+      .from("manual_customers")
+      .select(CUSTOMER_COLS, { count: "exact" })
+      .order("full_name")
+      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+    const asNumber = q.replace(/^c-?/i, "");
+    if (q) query = query.or(`full_name.ilike.%${q}%,company.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%${/^\d{1,9}$/.test(asNumber) ? `,number.eq.${asNumber}` : ""}`);
+    const { data, count } = await query;
+    const customers = (data ?? []) as ManualCustomer[];
+    const total = count ?? customers.length;
+    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const pageHref = (n: number) => `/admin/customers?${new URLSearchParams({ view: "manual", ...(sp.q ? { q: sp.q } : {}), ...(n > 1 ? { page: String(n) } : {}) })}`;
     return (
       <div>
-        {header(`${customers.length} customer${customers.length === 1 ? "" : "s"} added by hand, for phone orders, trade accounts and anyone without a website account.`)}
-        <form className="mb-5 flex flex-wrap gap-2" action="/admin/customers">
+        {header(`${total} customer${total === 1 ? "" : "s"} added by hand, for phone orders, trade accounts and anyone without a website account.`)}
+        <form key="manual" className="mb-5 flex flex-wrap gap-2" action="/admin/customers">
           <input type="hidden" name="view" value="manual" />
-          <input name="q" defaultValue={sp.q} placeholder="Name, company, email or phone" className="h-12 min-w-0 flex-1 basis-full rounded-[3px] border border-ink/15 bg-white px-3 text-base sm:basis-auto lg:h-10 lg:max-w-sm lg:text-sm" />
+          <input name="q" defaultValue={sp.q} placeholder="Number, name, company, email or phone" className="h-12 min-w-0 flex-1 basis-full rounded-[3px] border border-ink/15 bg-white px-3 text-base sm:basis-auto lg:h-10 lg:max-w-sm lg:text-sm" />
           <button className="h-12 rounded-[3px] border border-ink/15 bg-cream-50 px-4 text-sm lg:h-10">Find</button>
         </form>
         <CustomerBook customers={customers} searching={!!q} adding={sp.add === "1"} />
+        {pages > 1 && (
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <span className="text-sm text-stone-500">
+              Page {page} of {pages}
+            </span>
+            <div className="flex gap-2">
+              <ButtonLink href={pageHref(page - 1)} variant="secondary" size="sm" className={cn(page <= 1 && "pointer-events-none opacity-40")}>
+                <IconChevronLeft className="size-4" /> Previous
+              </ButtonLink>
+              <ButtonLink href={pageHref(page + 1)} variant="secondary" size="sm" className={cn(page >= pages && "pointer-events-none opacity-40")}>
+                Next <IconChevronRight className="size-4" />
+              </ButtonLink>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -95,7 +121,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     return (
       <div>
         {header(`${rows.length} guest${rows.length === 1 ? "" : "s"} who checked out without an account, grouped by email. If they later sign up with the same email, their orders move to their account.`)}
-        <form className="mb-5 flex flex-wrap gap-2" action="/admin/customers">
+        <form key="guests" className="mb-5 flex flex-wrap gap-2" action="/admin/customers">
           <input type="hidden" name="view" value="guests" />
           <input name="q" defaultValue={sp.q} placeholder="Name, email or phone" className="h-12 min-w-0 flex-1 basis-full rounded-[3px] border border-ink/15 bg-white px-3 text-base sm:basis-auto lg:h-10 lg:max-w-sm lg:text-sm" />
           <Dropdown
@@ -171,7 +197,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   return (
     <div>
       {header(`${rows.length} account${rows.length === 1 ? "" : "s"}. Guests who checked out without one are under "Without an account".`)}
-      <form className="mb-5 flex flex-wrap gap-2" action="/admin/customers">
+      <form key="accounts" className="mb-5 flex flex-wrap gap-2" action="/admin/customers">
         <input name="q" defaultValue={sp.q} placeholder="Name, email or company" className="h-12 min-w-0 flex-1 basis-full rounded-[3px] border border-ink/15 bg-white px-3 text-base sm:basis-auto lg:h-10 lg:max-w-sm lg:text-sm" />
         <Dropdown
           name="sort"

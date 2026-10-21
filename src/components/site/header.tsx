@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { IconBasket, IconMenu, IconUser } from "@/components/icons";
 import { Logo } from "./brand";
 import { MobileMenu } from "./mobile-menu";
+import { HeaderSearch } from "./header-search";
 import { useCart } from "@/components/cart/cart-store";
 import { cn } from "@/lib/utils";
 
@@ -71,7 +72,8 @@ export function Header() {
             })}
           </nav>
 
-          <div className="flex items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-1 md:gap-3">
+            <HeaderSearch />
             <Link href="/account" aria-label="Your account" className="hidden size-11 place-items-center sm:grid">
               <IconUser className="size-[22px]" />
             </Link>

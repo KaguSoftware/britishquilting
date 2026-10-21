@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getViewer } from "@/lib/data/catalog";
 import { rateLimit } from "@/lib/rate-limit";
+import { searchShop, type SearchHit } from "@/lib/data/shop";
 
 export type FormState = { ok: boolean; message: string } | null;
 
@@ -200,4 +201,9 @@ export async function sendContact(_: FormState, form: FormData): Promise<FormSta
     return { ok: false, message: "We couldn't send that just now. Please call or email us directly." };
   }
   return { ok: true, message: "Thank you. We'll reply within one working day." };
+}
+
+/** The search in the site header: products by name or by code (LIN3, LIN3RED). */
+export async function searchShopProducts(q: string): Promise<SearchHit[]> {
+  return searchShop(String(q ?? ""));
 }

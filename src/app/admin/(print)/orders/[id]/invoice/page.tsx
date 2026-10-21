@@ -4,6 +4,7 @@ import { staffDb } from "@/lib/actions/admin/guard";
 import { formatPence } from "@/lib/utils";
 import { addressLines, cutInstruction, formatDate, type Address } from "@/components/admin/format";
 import { InvoiceDocument } from "@/components/admin/invoices/invoice-document";
+import { docAction } from "@/lib/doc-action";
 
 const isId = (id: string) => /^[0-9a-f-]{36}$/i.test(id);
 
@@ -18,8 +19,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function OrderInvoicePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function OrderInvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ do?: string }> }) {
+  const [{ id }, sp] = await Promise.all([params, searchParams]);
   if (!isId(id)) notFound();
   const { db } = await staffDb();
   const [{ data: order }, { data: items }] = await Promise.all([
@@ -35,48 +36,48 @@ export default async function OrderInvoicePage({ params }: { params: Promise<{ i
     phone: string | null;
     company_name: string | null;
   } | null;
-  const billTo = addressLines(bill);
-  if (!billTo.length) billTo.push(profile?.full_name ?? order.email);
-  if (!bill?.company && profile?.company_name) billTo.splice(1, 0, profile.company_name);
+  const invoiceTo = addressLines(bill);
+  if (!invoiceTo.length) invoiceTo.push(profile?.full_name ?? order.email);
+  if (!bill?.company && profile?.company_name) invoiceTo.splice(1, 0, profile.company_name);
+  const phone = bill?.phone ?? ship?.phone ?? profile?.phone;
+  if (phone) invoiceTo.push(phone);
+  const londonDay = (d: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London" }).format(new Date(d));
 
   return (
     <InvoiceDocument
+      action={docAction(sp.do)}
       doc={{
-        label: `INV-${order.number}`,
-        issued: formatDate(order.created_at),
-        due: order.invoice_due_at ? formatDate(order.invoice_due_at) : null,
-        status: order.paid_at ? `Paid ${formatDate(order.paid_at)}` : "Awaiting payment",
-        reference: { label: "Order", value: `#${order.number}` },
-        billTo,
-        email: order.email,
-        phone: ship?.phone ?? bill?.phone ?? profile?.phone,
+        number: `INV-${order.number}`,
+        date: londonDay(order.created_at),
+        poNumber: `Order #${order.number}`,
+        invoiceTo,
+        deliverTo: order.fulfilment === "collection" ? ["Collected"] : addressLines(ship),
         lines: (items ?? []).map((i) => ({
           key: i.id,
+          // The QTY box is narrow, so lengths read "2m x 3" rather than the packing slip's "Cut 2m x 3".
+          quantity: cutInstruction({ ...i, length_m: i.length_m == null ? null : Number(i.length_m) }).replace(/^Cut /, ""),
           description: i.name,
-          quantity: cutInstruction({
-            ...i,
-            length_m: i.length_m == null ? null : Number(i.length_m),
-          }),
-          unit: formatPence(i.unit_price_pence),
+          price: formatPence(i.unit_price_pence),
           amount: formatPence(i.line_total_pence),
         })),
-        adjustments: [
-          { label: "Subtotal", value: formatPence(order.subtotal_pence) },
+        extras: [
           ...(order.discount_pence > 0
-            ? [
-                {
-                  label: `Discount${order.discount_code ? ` (${order.discount_code})` : ""}`,
-                  value: `−${formatPence(order.discount_pence)}`,
-                },
-              ]
+            ? [{ key: "discount", description: `Discount${order.discount_code ? ` (${order.discount_code})` : ""}`, amount: `\u2212${formatPence(order.discount_pence)}` }]
             : []),
           {
-            label: order.fulfilment === "collection" ? "Collection" : (order.shipping_name ?? "Delivery"),
-            value: order.shipping_pence ? formatPence(order.shipping_pence) : "Free",
+            key: "delivery",
+            description: order.fulfilment === "collection" ? "Collection" : (order.shipping_name ?? "Delivery"),
+            amount: order.shipping_pence ? formatPence(order.shipping_pence) : "Free",
           },
+          ...(order.paid_at
+            ? [{ key: "paid", description: `Paid with thanks, ${formatDate(order.paid_at)}` }]
+            : order.invoice_due_at
+              ? [{ key: "due", description: `Payment due by ${formatDate(order.invoice_due_at)}` }]
+              : []),
         ],
+        net: formatPence(order.total_pence - order.vat_included_pence),
+        vat: formatPence(order.vat_included_pence),
         total: formatPence(order.total_pence),
-        vat: order.vat_included_pence > 0 ? formatPence(order.vat_included_pence) : null,
       }}
     />
   );

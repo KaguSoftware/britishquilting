@@ -23,7 +23,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const [{ data: products }, { data: categories }] = await Promise.all([
     db
       .from("products")
-      .select("id, name, slug, colour, colour_hex, sale_mode, price_pence, stock_qty, low_stock_threshold, track_stock, is_active, is_featured, category_id, product_images(storage_path, sort_order, variant_id), product_variants(id, name, colour_hex, stock_qty, is_active, sort_order)")
+      .select("id, name, slug, code, code_base, colour, colour_hex, sale_mode, price_pence, stock_qty, low_stock_threshold, track_stock, is_active, is_featured, category_id, product_images(storage_path, sort_order, variant_id), product_variants(id, name, colour_hex, stock_qty, is_active, sort_order)")
       .order("sort_order")
       .order("name"),
     db.from("categories").select("id, name").order("sort_order"),
@@ -40,6 +40,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     return {
       id: p.id,
       name: p.name,
+      code: p.code_base as string | null,
       colour: p.colour,
       colour_hex: p.colour_hex,
       sale_mode: p.sale_mode,

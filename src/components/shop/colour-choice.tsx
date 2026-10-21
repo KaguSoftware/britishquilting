@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { photosFor } from "@/lib/photos";
 import { ProductGallery } from "./product-gallery";
 
-export type ColourOption = { id: string; name: string; colour_hex: string | null; in_stock: boolean; low_stock: boolean };
+export type ColourOption = { id: string; name: string; colour_hex: string | null; in_stock: boolean; low_stock: boolean; code?: string | null };
 type Img = { storage_path: string; alt: string | null; sort_order: number; variant_id?: string | null };
 
 type Ctx = { colours: ColourOption[]; selected: ColourOption | null; select: (id: string) => void; images: Img[] };
@@ -95,5 +95,17 @@ export function ColourSwatches() {
         })}
       </div>
     </fieldset>
+  );
+}
+
+/** The product code, following the chosen colour: LIN1 becomes LIN1IVO once Ivory is picked. */
+export function ProductCode({ code }: { code: string | null }) {
+  const { selected } = useColour();
+  const shown = selected?.code ?? code;
+  if (!shown) return null;
+  return (
+    <p className="mt-3 text-sm text-ink-soft">
+      Code <span className="font-medium tabular-nums text-ink">{shown}</span>
+    </p>
   );
 }

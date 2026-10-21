@@ -12,9 +12,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { db } = await staffDb();
-  const [{ data }, { customers, vatRate }] = await Promise.all([db.from("invoices").select("*").eq("id", id).maybeSingle(), editorData(db)]);
+  const { data } = await db.from("invoices").select("*").eq("id", id).maybeSingle();
   if (!data) notFound();
   const invoice = data as ManualInvoice;
+  const { customer, deliveryNotes, vatRate } = await editorData(db, invoice.customer_id);
 
   return (
     <div>
@@ -36,7 +37,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         }
         description={`For ${invoice.bill_to.full_name}, dated ${formatDate(invoice.issued_on)}.`}
       />
-      <InvoiceEditor invoice={invoice} customers={customers} defaultCustomerId={null} vatRate={vatRate} />
+      <InvoiceEditor invoice={invoice} customer={customer} deliveryNotes={deliveryNotes} vatRate={vatRate} />
     </div>
   );
 }

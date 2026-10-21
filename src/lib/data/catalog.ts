@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { Discount, PricedProduct, ShippingRate } from "@/lib/pricing";
 
@@ -10,8 +11,11 @@ export type Viewer = {
   isStaff: boolean;
 };
 
-/** The signed-in user (verified with Supabase Auth), or null. */
-export async function getViewer(): Promise<Viewer | null> {
+/**
+ * The signed-in user (verified with Supabase Auth), or null. Asked once per request: the layouts and the page
+ * all need it, and each lookup is two trips to Supabase.
+ */
+export const getViewer = cache(async function getViewer(): Promise<Viewer | null> {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return null;
@@ -28,7 +32,7 @@ export async function getViewer(): Promise<Viewer | null> {
     role,
     isStaff: role === "staff" || role === "owner",
   };
-}
+});
 
 const PRICED_COLUMNS =
   "id, name, sale_mode, price_pence, min_length_m, length_step_m, max_length_m, weight_g_per_unit, swatch_enabled, swatch_price_pence, stock_qty, track_stock, is_active, product_variants(id, name, stock_qty, is_active, sort_order)";

@@ -1,24 +1,28 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
-import { IconDocument, IconPhone, IconPlus, IconTrash } from "@/components/icons";
+import { useRef, useState } from "react";
+import { IconDownload, IconPrint, IconTrash } from "@/components/icons";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Dropdown } from "@/components/ui/dropdown";
-import { deleteInvoice, saveInvoice } from "@/lib/actions/admin/invoices";
-import { parsePounds, vatFromGross } from "@/lib/finance/calc";
-import { billToLines, invoiceTotal, lineAmount, telHref, type ManualCustomer, type ManualInvoice } from "@/lib/invoices";
+import { customerDeliveryNotes, deleteInvoice, saveInvoice } from "@/lib/actions/admin/invoices";
+import { vatFromGross } from "@/lib/finance/calc";
+import { addressBlock, customerNo, invoiceTotal, lineAmount, manualInvoiceNo, type InvoiceLine, type ManualCustomer, type ManualInvoice, type ProductPick } from "@/lib/invoices";
+import { deliveryNoteNo, type DeliveryLine, type DeliveryNoteOption } from "@/lib/delivery-notes";
 import { formatPence } from "@/lib/utils";
-import { Button, ButtonLink, Card, Field, Input, MoneyInput, Textarea, btn } from "../ui";
+import { Button, ButtonLink, Card, Field, Textarea } from "../ui";
 import { SaveBar, SwitchRow, useAction, useConfirm, useUnsavedGuard } from "../controls";
+import { formatDate } from "../format";
 import { CustomerModal } from "@/components/admin/customers/customer-modal";
+import { CustomerBox, DeliverToActions, DeliverToBox, PadDate, PadDropdown, PadInput, PadSearch, RemoveLine } from "@/components/admin/documents/pad-fields";
+import { PadAction } from "@/components/admin/documents/sheet";
+import { productSuggest } from "@/components/admin/documents/product-suggest";
+import { INVOICE_ROWS, InvoiceRow, InvoiceSheet } from "./invoice-document";
 
-type Line = {
-  key: number;
-  description: string;
-  quantity: string;
-  unit: string;
-};
+/** A product picked from the search, with how many. Its price is the product's; only the quantity is typed. */
+type ProductLine = { key: number; code: string; description: string; unit_price_pence: number; quantity: string };
+/** A line written by hand before products had to be picked: kept as it was, or removed. */
+type OldLine = { key: number; old: InvoiceLine };
+type Line = ProductLine | OldLine;
 type Form = {
   customer_id: string | null;
   lines: Line[];
@@ -26,32 +30,50 @@ type Form = {
   due_on: string | null;
   note: string;
   paid: boolean;
+  deliver_to: string;
+  po_number: string;
+  customer_code: string;
+  delivery_note_id: string | null;
 };
 
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 
-function toForm(inv: ManualInvoice | null, customerId: string | null): Form {
+const isProduct = (l: Line): l is ProductLine => "code" in l;
+
+const fromPick = (key: number, p: ProductPick, quantity = "1"): ProductLine => ({ key, code: p.code, description: p.description, unit_price_pence: p.unit_price_pence, quantity });
+
+function toForm(inv: ManualInvoice | null, customer: ManualCustomer | null, fromNote: DeliveryNoteOption | null, fromItems: DeliveryLine[]): Form {
+  const customerId = customer?.id ?? null;
+  // Invoicing a delivery note: its products come across with their quantities and prices.
+  const copied = fromItems
+    .filter((l) => l.code && l.qty != null && l.unit_price_pence != null)
+    .map((l, i): ProductLine => ({ key: i, code: l.code!, description: l.description, unit_price_pence: l.unit_price_pence!, quantity: String(l.qty) }));
   if (!inv)
     return {
-      customer_id: customerId,
-      lines: [{ key: 0, description: "", quantity: "1", unit: "" }],
+      customer_id: fromNote?.customer_id ?? customerId,
+      lines: copied,
       issued_on: today(),
       due_on: null,
       note: "",
       paid: false,
+      deliver_to: fromNote?.deliver_to ?? "",
+      po_number: fromNote?.po_number ?? "",
+      customer_code: customer?.number ? customerNo(customer.number) : "",
+      delivery_note_id: fromNote?.id ?? null,
     };
   return {
     customer_id: inv.customer_id,
-    lines: inv.items.map((l, i) => ({
-      key: i,
-      description: l.description,
-      quantity: String(l.quantity),
-      unit: (l.unit_price_pence / 100).toFixed(2),
-    })),
+    lines: inv.items.map((l, i): Line =>
+      l.code ? { key: i, code: l.code, description: l.description, unit_price_pence: l.unit_price_pence, quantity: String(l.quantity) } : { key: i, old: l },
+    ),
     issued_on: inv.issued_on,
     due_on: inv.due_on,
     note: inv.note ?? "",
     paid: !!inv.paid_at,
+    deliver_to: inv.deliver_to ?? "",
+    po_number: inv.po_number ?? "",
+    customer_code: inv.customer_code ?? "",
+    delivery_note_id: inv.delivery_note_id,
   };
 }
 
@@ -60,22 +82,32 @@ const parseQty = (v: string) => {
   return v.trim() && Number.isFinite(n) && n > 0 ? n : null;
 };
 
+/** Fill in an invoice on the pad itself, exactly as it prints. */
 export function InvoiceEditor({
   invoice,
-  customers: initialCustomers,
-  defaultCustomerId,
+  customer: initialCustomer = null,
+  deliveryNotes: initialNotes = [],
+  fromNote = null,
+  fromNoteItems = [],
   vatRate,
 }: {
   invoice: ManualInvoice | null;
-  customers: ManualCustomer[];
-  defaultCustomerId: string | null;
+  /** Who it is for: the invoice's customer, or the one it was started from. */
+  customer: ManualCustomer | null;
+  /** That customer's delivery notes. */
+  deliveryNotes: DeliveryNoteOption[];
+  /** Start a new invoice from this delivery note. */
+  fromNote?: DeliveryNoteOption | null;
+  /** That delivery note's goods. */
+  fromNoteItems?: DeliveryLine[];
   vatRate: number;
 }) {
   const router = useRouter();
   const { run, pending } = useAction();
   const confirm = useConfirm();
-  const [customers, setCustomers] = useState(initialCustomers);
-  const [saved, setSaved] = useState(() => toForm(invoice, defaultCustomerId));
+  const [customer, setCustomer] = useState(initialCustomer);
+  const [deliveryNotes, setDeliveryNotes] = useState(initialNotes);
+  const [saved, setSaved] = useState(() => toForm(invoice, initialCustomer, fromNote, fromNoteItems));
   const [form, setForm] = useState(saved);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -84,45 +116,45 @@ export function InvoiceEditor({
   const dirty = JSON.stringify(form) !== JSON.stringify(saved);
   useUnsavedGuard(dirty);
 
-  const customer = customers.find((c) => c.id === form.customer_id) ?? null;
   // An invoice whose customer was removed still shows who it was written for.
-  const orphan = invoice && !customer && !form.customer_id ? invoice.bill_to : null;
+  const orphan = invoice && !invoice.customer_id && !form.customer_id ? invoice.bill_to : null;
 
-  const parsed = useMemo(
-    () =>
-      form.lines.map((l) => ({
-        quantity: parseQty(l.quantity),
-        unit_price_pence: parsePounds(l.unit),
-      })),
-    [form.lines],
-  );
-  const total = invoiceTotal(
-    parsed.map((p) => ({
-      quantity: p.quantity ?? 0,
-      unit_price_pence: p.unit_price_pence ?? 0,
-    })),
-  );
+  // Quantity times the product's price, as you type.
+  const lineValues = form.lines.map((l) => (isProduct(l) ? { quantity: parseQty(l.quantity), unit_price_pence: l.unit_price_pence } : l.old));
+  const total = invoiceTotal(lineValues.map((v) => ({ quantity: v.quantity ?? 0, unit_price_pence: v.unit_price_pence })));
+  const vat = vatFromGross(total, vatRate);
+  const pages = Math.max(1, Math.ceil(form.lines.length / (INVOICE_ROWS - 1)));
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
-  const setLine = (key: number, patch: Partial<Line>) =>
-    setForm((f) => ({
-      ...f,
-      lines: f.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)),
-    }));
-  const addLine = () =>
-    setForm((f) => ({
-      ...f,
-      lines: [...f.lines, { key: nextKey.current++, description: "", quantity: "1", unit: "" }],
-    }));
+  const setLine = (key: number, next: Line) => setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? next : l)) }));
   const removeLine = (key: number) => setForm((f) => ({ ...f, lines: f.lines.filter((l) => l.key !== key) }));
+  const addProduct = (p: ProductPick) => setForm((f) => ({ ...f, lines: [...f.lines, fromPick(nextKey.current++, p)] }));
+
+  const customerNotes = deliveryNotes.filter((n) => n.customer_id === form.customer_id);
+  const chooseCustomer = async (c: ManualCustomer) => {
+    const previousNo = customer?.number ? customerNo(customer.number) : "";
+    setCustomer(c);
+    setForm((f) => ({
+      ...f,
+      customer_id: c.id,
+      // A delivery note only makes sense for its own customer.
+      delivery_note_id: f.customer_id === c.id ? f.delivery_note_id : null,
+      // The Customer Code box follows the customer number, unless someone typed their own code.
+      customer_code: !f.customer_code.trim() || f.customer_code === previousNo ? customerNo(c.number) : f.customer_code,
+    }));
+    if (c.id !== form.customer_id) setDeliveryNotes(await customerDeliveryNotes(c.id).catch(() => []));
+  };
+  const chooseNote = (id: string | null) => {
+    const n = deliveryNotes.find((x) => x.id === id);
+    // Fill the boxes the delivery note already answers, without overwriting anything typed.
+    setForm((f) => ({ ...f, delivery_note_id: id, deliver_to: f.deliver_to || n?.deliver_to || "", po_number: f.po_number || n?.po_number || "" }));
+  };
 
   const save = async () => {
     if (!form.customer_id) return setError("Please choose who the invoice is for, or add a new customer.");
-    if (!form.lines.length) return setError("Add at least one line.");
+    if (!form.lines.length) return setError("Add at least one product, using the search under the goods.");
     for (const [i, l] of form.lines.entries()) {
-      if (!l.description.trim()) return setError(`Line ${i + 1} needs a description.`);
-      if (parsed[i].quantity == null) return setError(`Line ${i + 1}: the quantity should be a number, like 2 or 1.5`);
-      if (parsed[i].unit_price_pence == null) return setError(`Line ${i + 1}: please enter a price, like 12.50`);
+      if (isProduct(l) && parseQty(l.quantity) == null) return setError(`Line ${i + 1}: how many ${l.description}? Enter a number, like 2 or 1.5.`);
     }
     if (!form.issued_on) return setError("Please choose the invoice date.");
     setError(null);
@@ -130,15 +162,17 @@ export function InvoiceEditor({
       saveInvoice({
         id: invoice?.id,
         customer_id: form.customer_id!,
-        items: form.lines.map((l, i) => ({
-          description: l.description,
-          quantity: parsed[i].quantity!,
-          unit_price_pence: parsed[i].unit_price_pence!,
-        })),
+        items: form.lines.map((l) =>
+          isProduct(l) ? { code: l.code, description: l.description, quantity: parseQty(l.quantity)!, unit_price_pence: l.unit_price_pence } : { ...l.old, code: null },
+        ),
         issued_on: form.issued_on!,
         due_on: form.due_on,
         note: form.note,
         paid: form.paid,
+        deliver_to: form.deliver_to,
+        po_number: form.po_number,
+        customer_code: form.customer_code,
+        delivery_note_id: form.delivery_note_id,
       }),
     );
     if (!res.ok) return setError(res.error);
@@ -162,160 +196,150 @@ export function InvoiceEditor({
     }
   };
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_340px] lg:items-start">
-      <div className="space-y-6">
-        <Card
-          title="Customer"
-          action={
-            <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
-              <IconPlus className="size-4" /> New customer
-            </Button>
-          }
-        >
-          <Field label="Who is this invoice for?" htmlFor="inv-customer">
-            <Dropdown
-              id="inv-customer"
-              value={form.customer_id}
-              onChange={(v) => set("customer_id", v)}
-              placeholder={customers.length ? "Choose a customer" : "Add a customer first"}
-              sheetTitle="Choose a customer"
-              options={customers.map((c) => ({
-                value: c.id,
-                label: c.full_name,
-                text: c.full_name,
-                hint: [c.company, c.phone].filter(Boolean).join(" · ") || undefined,
-              }))}
+  const qty = (n: number) => n.toLocaleString("en-GB", { maximumFractionDigits: 2 });
+  const rows = [
+    ...form.lines.map((l, i) => {
+      if (!isProduct(l))
+        return (
+          <InvoiceRow
+            key={l.key}
+            quantity={qty(l.old.quantity)}
+            description={<span title="Written by hand before products had to be picked">{l.old.description}</span>}
+            price={formatPence(l.old.unit_price_pence)}
+            amount={formatPence(lineAmount(l.old))}
+            muted
+            action={<RemoveLine onClick={() => removeLine(l.key)} label={`Remove line ${i + 1}`} />}
+          />
+        );
+      const q = parseQty(l.quantity);
+      return (
+        <InvoiceRow
+          key={l.key}
+          code={<span className="px-1">{l.code}</span>}
+          quantity={
+            <PadInput
+              value={l.quantity}
+              onChange={(e) => setLine(l.key, { ...l, quantity: e.target.value })}
+              inputMode="decimal"
+              placeholder="0"
+              aria-label={`Line ${i + 1} quantity`}
+              aria-invalid={q == null}
+              className="tabular-nums"
             />
-          </Field>
-          {(customer || orphan) && (
-            <div className="mt-4 flex items-start justify-between gap-4 border-t border-ink/10 pt-4 text-sm">
-              <address className="not-italic leading-relaxed text-ink-soft">
-                {billToLines(customer ?? orphan).map((l, i) => (
-                  <span key={i} className={i === 0 ? "block font-medium text-ink" : "block"}>
-                    {l}
-                  </span>
-                ))}
-                {(customer ?? orphan)?.email && <span className="block">{(customer ?? orphan)!.email}</span>}
-                {orphan && <span className="mt-1 block text-xs italic text-stone-500">This customer was removed from the list. Choose another to change the invoice.</span>}
-              </address>
-              {(customer ?? orphan)?.phone && (
-                <a href={telHref((customer ?? orphan)!.phone!)} className={btn("secondary", "sm")}>
-                  <IconPhone className="size-4" /> Call {(customer ?? orphan)!.phone}
-                </a>
-              )}
-            </div>
-          )}
-        </Card>
-
-        <Card title="What it's for" bodyClassName="p-0">
-          <div className="hidden grid-cols-[1fr_90px_130px_100px_40px] gap-3 border-b border-ink/10 px-5 py-2.5 text-xs text-stone-500 md:grid">
-            <span>Description</span>
-            <span>Quantity</span>
-            <span>Unit price</span>
-            <span className="text-right">Amount</span>
-            <span />
-          </div>
-          <ol className="divide-y divide-ink/10">
-            {form.lines.map((l, i) => (
-              <li key={l.key} className="grid grid-cols-[1fr_1fr_auto] gap-3 px-5 py-3 md:grid-cols-[1fr_90px_130px_100px_40px] md:items-center">
-                <Input
-                  value={l.description}
-                  onChange={(e) => setLine(l.key, { description: e.target.value })}
-                  placeholder="e.g. Liberty Tana Lawn, cut to 2m"
-                  aria-label={`Line ${i + 1} description`}
-                  className="col-span-3 md:col-span-1"
-                />
-                <Input
-                  value={l.quantity}
-                  onChange={(e) => setLine(l.key, { quantity: e.target.value })}
-                  inputMode="decimal"
-                  className="tabular-nums"
-                  aria-label={`Line ${i + 1} quantity`}
-                />
-                <MoneyInput value={l.unit} onChange={(e) => setLine(l.key, { unit: e.target.value })} placeholder="0.00" aria-label={`Line ${i + 1} unit price`} />
-                <span className="hidden text-right tabular-nums md:block">
-                  {parsed[i].quantity != null && parsed[i].unit_price_pence != null
-                    ? formatPence(
-                        lineAmount({
-                          quantity: parsed[i].quantity!,
-                          unit_price_pence: parsed[i].unit_price_pence!,
-                        }),
-                      )
-                    : "–"}
-                </span>
-                <Button variant="ghost" size="sm" onClick={() => removeLine(l.key)} disabled={form.lines.length === 1} aria-label={`Remove line ${i + 1}`} className="self-center">
-                  <IconTrash className="size-4" />
-                </Button>
-              </li>
-            ))}
-          </ol>
-          <div className="flex flex-col gap-4 border-t border-ink/10 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
-            <Button variant="secondary" size="sm" onClick={addLine} disabled={form.lines.length >= 100}>
-              <IconPlus className="size-4" /> Add a line
-            </Button>
-            <dl className="grid grid-cols-[auto_auto] gap-x-6 text-right tabular-nums">
-              <dt className="text-sm text-ink-soft">Total</dt>
-              <dd className="font-display text-2xl text-aubergine-900">{formatPence(total)}</dd>
-              {vatRate > 0 && total > 0 && (
-                <>
-                  <dt className="text-xs text-stone-500">Includes VAT at {vatRate}%</dt>
-                  <dd className="text-xs text-stone-500">{formatPence(vatFromGross(total, vatRate))}</dd>
-                </>
-              )}
-            </dl>
-          </div>
-        </Card>
-      </div>
-
-      <div className="space-y-6">
-        <Card title="Details">
-          <div className="space-y-4">
-            <Field label="Invoice date" htmlFor="inv-issued">
-              <DatePicker id="inv-issued" value={form.issued_on} onChange={(v) => set("issued_on", v)} clearable={false} />
-            </Field>
-            <Field label="Payment due" hint="Optional" htmlFor="inv-due">
-              <DatePicker id="inv-due" value={form.due_on} onChange={(v) => set("due_on", v)} min={form.issued_on ?? undefined} placeholder="No due date" />
-            </Field>
-            <SwitchRow checked={form.paid} onChange={(v) => set("paid", v)} title="Paid" description="Turn on once the money has arrived." />
-            <Field label="Note on the invoice" hint="Printed under the lines." htmlFor="inv-note">
-              <Textarea id="inv-note" value={form.note} onChange={(e) => set("note", e.target.value)} rows={3} />
-            </Field>
-          </div>
-        </Card>
-
-        {invoice && (
-          <div className="flex flex-col gap-2">
-            <ButtonLink href={`/admin/invoices/${invoice.id}/print`} target="_blank" variant="secondary">
-              <IconDocument className="size-4" /> Open invoice to save as PDF
-            </ButtonLink>
-            {dirty && <p className="text-xs text-stone-500">Save first so the PDF shows your latest changes.</p>}
-            <Button variant="danger" onClick={remove} disabled={pending}>
-              <IconTrash className="size-4" /> Delete invoice
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {error && <p className="text-sm text-danger lg:col-span-2">{error}</p>}
-      <div className="lg:col-span-2">
-        <SaveBar
-          dirty={dirty || !invoice}
-          saving={pending}
-          onSave={save}
-          onDiscard={invoice ? () => setForm(saved) : undefined}
-          saveLabel={invoice ? "Save invoice" : "Create invoice"}
+          }
+          description={
+            // Only ever a product from the search; picking another one swaps it, keeping the quantity.
+            <PadSearch
+              {...productSuggest}
+              onPick={(p) => setLine(l.key, fromPick(l.key, p, l.quantity))}
+              display={l.description}
+              placeholder="Type a code or name to change the product"
+              label={`Line ${i + 1} product`}
+              className="-ml-1"
+              empty={(term) => (term ? `No product matches \u201c${term}\u201d.` : "No products yet.")}
+            />
+          }
+          price={formatPence(l.unit_price_pence)}
+          amount={q != null ? formatPence(lineAmount({ quantity: q, unit_price_pence: l.unit_price_pence })) : ""}
+          action={<RemoveLine onClick={() => removeLine(l.key)} label={`Remove line ${i + 1}`} />}
         />
+      );
+    }),
+    form.lines.length < 100 && (
+      <InvoiceRow
+        key="add"
+        description={
+          <PadSearch
+            {...productSuggest}
+            onPick={addProduct}
+            placeholder="Add a product: type its code or name"
+            label="Add a product by code or name"
+            className="-ml-1"
+            empty={(term) => (term ? `No product matches \u201c${term}\u201d.` : "No products yet.")}
+          />
+        }
+      />
+    ),
+  ];
+
+  return (
+    <div>
+      {invoice && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <ButtonLink href={`/admin/invoices/${invoice.id}/print?do=print`} target="_blank" variant="secondary" size="sm">
+            <IconPrint className="size-4" /> Print
+          </ButtonLink>
+          <ButtonLink href={`/admin/invoices/${invoice.id}/print?do=pdf`} target="_blank" variant="secondary" size="sm">
+            <IconDownload className="size-4" /> PDF
+          </ButtonLink>
+          <Button variant="danger" size="sm" onClick={remove} disabled={pending} className="sm:ml-auto">
+            <IconTrash className="size-4" /> Delete
+          </Button>
+          {dirty && <p className="w-full text-xs text-stone-500">Save first so the printout shows your latest changes.</p>}
+        </div>
+      )}
+
+      <div className="-mx-4 overflow-x-auto bg-cream-200 py-8 sm:mx-0 sm:rounded-[3px]">
+        <div className="mx-auto w-fit px-20">
+          <InvoiceSheet
+            grow
+            number={invoice ? manualInvoiceNo(invoice.number) : <span className="text-[13px] italic text-stone-500">Given when saved</span>}
+            date={<PadDate value={form.issued_on} onChange={(v) => set("issued_on", v)} label="Invoice date" />}
+            page={`1 of ${pages}`}
+            delNoteNo={
+              <PadDropdown
+                value={form.delivery_note_id ?? ""}
+                onChange={(v) => chooseNote(v || null)}
+                placeholder={customerNotes.length ? "None" : " "}
+                sheetTitle="Choose a delivery note"
+                aria-label="Delivery note number"
+                disabled={!customerNotes.length}
+                options={[
+                  { value: "", label: "None" },
+                  ...customerNotes.map((n) => ({ value: n.id, label: deliveryNoteNo(n.number), text: String(n.number), hint: formatDate(n.issued_on) })),
+                ]}
+              />
+            }
+            customerCode={<PadInput value={form.customer_code} onChange={(e) => set("customer_code", e.target.value)} aria-label="Customer code" />}
+            poNumber={<PadInput value={form.po_number} onChange={(e) => set("po_number", e.target.value)} aria-label="PO number" />}
+            invoiceTo={<CustomerBox customer={customer} onChange={chooseCustomer} onAdd={() => setAdding(true)} orphan={orphan} />}
+            invoiceToAction={<PadAction onClick={() => setAdding(true)}>+ New customer</PadAction>}
+            deliverTo={<DeliverToBox value={form.deliver_to} onChange={(v) => set("deliver_to", v)} />}
+            deliverToAction={<DeliverToActions onPick={(v) => set("deliver_to", v)} invoiceAddress={addressBlock(customer)} />}
+            rows={rows}
+            net={formatPence(total - vat)}
+            vat={formatPence(vat)}
+            total={formatPence(total)}
+          />
+        </div>
       </div>
+
+      <Card title="Payment and notes" description="Printed under the goods on the invoice." className="mt-6">
+        <div className="grid gap-5 md:grid-cols-[220px_1fr_1.4fr] md:items-start">
+          <Field label="Payment due" hint="Optional" htmlFor="inv-due">
+            <DatePicker id="inv-due" value={form.due_on} onChange={(v) => set("due_on", v)} min={form.issued_on ?? undefined} placeholder="No due date" />
+          </Field>
+          <SwitchRow checked={form.paid} onChange={(v) => set("paid", v)} title="Paid" description="Turn on once the money has arrived." />
+          <Field label="Note" htmlFor="inv-note">
+            <Textarea id="inv-note" value={form.note} onChange={(e) => set("note", e.target.value)} rows={2} />
+          </Field>
+        </div>
+      </Card>
+
+      {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+      <SaveBar
+        dirty={dirty || !invoice}
+        saving={pending}
+        onSave={save}
+        onDiscard={invoice ? () => setForm(saved) : undefined}
+        saveLabel={invoice ? "Save invoice" : "Create invoice"}
+      />
 
       <CustomerModal
         open={adding}
         customer={null}
         onClose={() => setAdding(false)}
-        onSaved={(c) => {
-          setCustomers((cs) => [...cs, c].sort((a, b) => a.full_name.localeCompare(b.full_name)));
-          set("customer_id", c.id);
-        }}
+        onSaved={chooseCustomer}
       />
     </div>
   );

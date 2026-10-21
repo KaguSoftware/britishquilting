@@ -40,9 +40,11 @@ export function ButtonLink({
   className,
   children,
   target,
-}: { href: string; variant?: Variant; size?: Size; className?: string; children: ReactNode; target?: string }) {
+  title,
+  "aria-label": ariaLabel,
+}: { href: string; variant?: Variant; size?: Size; className?: string; children: ReactNode; target?: string; title?: string; "aria-label"?: string }) {
   return (
-    <Link href={href} target={target} className={cn(btn(variant, size), className)}>
+    <Link href={href} target={target} title={title} aria-label={ariaLabel} className={cn(btn(variant, size), className)}>
       {children}
     </Link>
   );

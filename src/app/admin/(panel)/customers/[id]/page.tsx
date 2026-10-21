@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { staffDb } from "@/lib/actions/admin/guard";
 import { formatPence } from "@/lib/utils";
-import { Badge, Card, PageHeader } from "@/components/admin/ui";
+import { IconDownload, IconPrint } from "@/components/icons";
+import { Badge, ButtonLink, Card, PageHeader } from "@/components/admin/ui";
 import { CopyButton } from "@/components/ui/copy-button";
 import { ORDER_STATUS, addressLines, formatDate, type OrderStatus } from "@/components/admin/format";
 
@@ -50,7 +51,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
-        <Card title="Orders" bodyClassName="p-0">
+        <Card title="Orders and invoices" bodyClassName="p-0">
           {(orders ?? []).length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-ink-soft">No orders yet.</p>
           ) : (
@@ -58,13 +59,26 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
               {orders!.map((o) => {
                 const s = ORDER_STATUS[o.status as OrderStatus];
                 return (
-                  <li key={o.id}>
-                    <Link href={`/admin/orders/${o.id}`} className="flex min-h-14 items-center gap-3 px-5 py-3 hover:bg-cream-100">
+                  <li key={o.id} className="flex items-center hover:bg-cream-100">
+                    <Link href={`/admin/orders/${o.id}`} className="flex min-h-14 flex-1 items-center gap-3 py-3 pl-5 pr-3">
                       <span className="font-display text-lg text-aubergine-900">#{o.number}</span>
                       <span className="flex-1 text-sm text-stone-500">{formatDate(o.created_at)}</span>
                       <Badge tone={s?.tone}>{s?.label}</Badge>
                       <span className="w-20 text-right text-sm tabular-nums">{formatPence(o.total_pence)}</span>
                     </Link>
+                    {/* Abandoned checkouts never get an invoice. */}
+                    <span className="flex w-28 justify-end gap-1.5 pr-5">
+                      {o.status !== "pending" && (
+                        <>
+                          <ButtonLink href={`/admin/orders/${o.id}/invoice?do=print`} target="_blank" variant="secondary" size="sm" aria-label={`Print invoice INV-${o.number}`}>
+                            <IconPrint className="size-4" />
+                          </ButtonLink>
+                          <ButtonLink href={`/admin/orders/${o.id}/invoice?do=pdf`} target="_blank" variant="secondary" size="sm" aria-label={`Download invoice INV-${o.number} as a PDF`}>
+                            <IconDownload className="size-4" />
+                          </ButtonLink>
+                        </>
+                      )}
+                    </span>
                   </li>
                 );
               })}

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import {IconArrowRight, IconCheck, IconSwatch, IconScissors, IconVan} from "@/components/icons";
 import { Reveal } from "@/components/site/reveal";
 import { ProductCard } from "@/components/shop/product-card";
-import { ColourGallery, ColourProvider } from "@/components/shop/colour-choice";
+import { ColourGallery, ColourProvider, ProductCode } from "@/components/shop/colour-choice";
 import { photosFor } from "@/lib/photos";
 import { PurchasePanel } from "@/components/shop/purchase-panel";
 import { RecentlyViewedRail, RecordRecentlyViewed } from "@/components/shop/recently-viewed";
@@ -12,7 +12,7 @@ import { ReviewForm } from "@/components/shop/review-form";
 import { WishlistToggle } from "@/components/shop/wishlist-toggle";
 import { Accordion, Breadcrumbs, Stars } from "@/components/shop/bits";
 import { getViewer } from "@/lib/data/catalog";
-import { getCategories, getListProducts, getOwnReview, getProduct, getReviews, isWishlisted } from "@/lib/data/shop";
+import { findProductAddress, getCategories, getListProducts, getOwnReview, getProduct, getReviews, isWishlisted } from "@/lib/data/shop";
 import { formatMetres, siteUrl, storageUrl } from "@/lib/utils";
 
 export async function generateMetadata({ params }: PageProps<"/product/[slug]">): Promise<Metadata> {
@@ -31,8 +31,16 @@ export async function generateMetadata({ params }: PageProps<"/product/[slug]">)
 
 export default async function ProductPage({ params, searchParams }: PageProps<"/product/[slug]">) {
   const { slug } = await params;
-  const { colour: wanted } = await searchParams;
+  const query = await searchParams;
+  const { colour: wanted } = query;
   const p = await getProduct(slug);
+  // Old addresses (blackout-lining), colour codes (lin1ivo) and codes typed in capitals all end up on the product's own address.
+  const target = p ? (slug === p.slug ? null : `/product/${p.slug}`) : await findProductAddress(slug);
+  if (target) {
+    const url = new URL(target, "http://x");
+    for (const [k, v] of Object.entries(query)) if (typeof v === "string" && !url.searchParams.has(k)) url.searchParams.set(k, v);
+    permanentRedirect(`${url.pathname}${url.search}`);
+  }
   if (!p) notFound();
 
   const [viewer, reviews, categories, all] = await Promise.all([getViewer().catch(() => null), getReviews(p.id), getCategories(), getListProducts()]);
@@ -141,6 +149,7 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
             {category && <p className="eyebrow text-gold-600">{category.name}</p>}
             <h1 className="font-display mt-3 text-5xl leading-[1.02] text-balance md:text-6xl">{p.name}</h1>
             {p.subtitle && <p className="mt-3 text-lg text-ink-soft">{p.subtitle}</p>}
+            <ProductCode code={p.code ?? null} />
             {p.rating_count > 0 && (
               <a href="#reviews" className="mt-4 inline-flex items-center gap-2 text-sm text-ink-soft hover:text-aubergine-700">
                 <Stars value={Number(p.rating_avg)} /> {Number(p.rating_avg).toFixed(1)} ({p.rating_count} review{p.rating_count === 1 ? "" : "s"})

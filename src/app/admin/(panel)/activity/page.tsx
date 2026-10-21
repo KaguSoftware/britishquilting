@@ -45,6 +45,12 @@ const LABELS: Record<string, string> = {
   "post.update": "edited a journal post",
   "post.publish": "published a journal post",
   "post.delete": "deleted a journal post",
+  "invoice.create": "wrote an invoice",
+  "invoice.update": "edited an invoice",
+  "invoice.delete": "deleted an invoice",
+  "delivery_note.create": "wrote a delivery note",
+  "delivery_note.update": "edited a delivery note",
+  "delivery_note.delete": "deleted a delivery note",
 };
 
 function link(entity: string, id: string | null) {
@@ -52,6 +58,9 @@ function link(entity: string, id: string | null) {
   if (entity === "order") return `/admin/orders/${id}`;
   if (entity === "product") return `/admin/products/${id}`;
   if (entity === "post") return `/admin/journal/${id}`;
+  if (entity === "invoice") return `/admin/invoices/${id}`;
+  if (entity === "delivery_note") return `/admin/delivery-notes/${id}`;
+  if (entity === "manual_customer") return `/admin/customers/manual/${id}`;
   if (entity === "profile") return `/admin/customers/${id}`;
   return null;
 }

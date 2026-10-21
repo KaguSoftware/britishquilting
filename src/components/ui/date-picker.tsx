@@ -32,6 +32,12 @@ type Props = {
   clearable?: boolean;
   disabled?: boolean;
   className?: string;
+  /** Extra classes for the trigger button, e.g. to sit on a printed form. */
+  triggerClassName?: string;
+  /** Show the chosen day another way, e.g. 07/10/2026. */
+  formatValue?: (d: Date) => string;
+  /** The calendar icon in the trigger. */
+  icon?: boolean;
   "aria-label"?: string;
 };
 
@@ -48,6 +54,9 @@ export function DatePicker({
   clearable = true,
   disabled,
   className,
+  triggerClassName,
+  formatValue,
+  icon = true,
   ...aria
 }: Props) {
   const auto = useId();
@@ -223,10 +232,10 @@ export function DatePicker({
         aria-expanded={open}
         aria-label={aria["aria-label"]}
         onClick={() => { if (!open) { setMobile(window.matchMedia("(max-width: 639px)").matches); setView(selected ?? new Date()); setFocusDay(selected ?? new Date()); place(); setOpen(true); } else close(); }}
-        className={cn(inputClasses, "flex h-12 items-center gap-3 text-left md:h-11", open && "border-aubergine-500 ring-3 ring-aubergine-300/35")}
+        className={cn(inputClasses, "flex h-12 items-center gap-3 text-left md:h-11", open && "border-aubergine-500 ring-3 ring-aubergine-300/35", triggerClassName)}
       >
-        <IconCalendar className="size-[18px] shrink-0 text-ink-soft" />
-        <span className={cn("flex-1 truncate", !selected && "text-stone-500")}>{selected ? fmt.format(selected) : placeholder}</span>
+        {icon && <IconCalendar className="size-[18px] shrink-0 text-ink-soft" />}
+        <span className={cn("flex-1 truncate", !selected && "text-stone-500")}>{selected ? (formatValue ?? fmt.format)(selected) : placeholder}</span>
       </button>
       {name && <input type="hidden" name={name} value={current ?? ""} />}
 

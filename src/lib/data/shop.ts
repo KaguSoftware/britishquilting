@@ -10,7 +10,7 @@ const REVALIDATE_SECONDS = 300;
 export type Category = { id: string; slug: string; name: string; description: string | null };
 
 /** A colour as the shop sees it: whether it can be bought, never the raw stock figure. */
-export type PublicVariant = { id: string; name: string; colour_hex: string | null; in_stock: boolean; low_stock: boolean };
+export type PublicVariant = { id: string; name: string; colour_hex: string | null; in_stock: boolean; low_stock: boolean; code?: string | null };
 
 type VariantRow = { id: string; name: string; colour_hex: string | null; stock_qty: number; sort_order: number };
 
@@ -36,6 +36,8 @@ function publicVariants(rows: VariantRow[] | null | undefined, p: { track_stock?
 }
 
 export type ProductDetail = ProductCardData & {
+  /** e.g. LIN3; each colour has its own (see variants) */
+  code?: string | null;
   description: string | null;
   category_id: string | null;
   min_length_m: number | null;
@@ -124,10 +126,13 @@ export const getListProducts = cache(
   unstable_cache(
     async (): Promise<ListProduct[]> => {
       const supabase = createPublicClient();
-      const [list, colourRows] = await Promise.all([
+      const [list, colourRows, codeRows] = await Promise.all([
         supabase.from("products_public").select(LIST_COLUMNS).order("sort_order"),
         supabase.from("products").select(`id, track_stock, low_stock_threshold, ${VARIANT_COLUMNS}`).eq("is_active", true),
+        // Separate, so the shop still lists everything on a database without product codes yet.
+        supabase.from("products_public").select("id, code, code_base"),
       ]);
+      const codes = new Map((codeRows.data ?? []).map((c) => [c.id as string, c as { code: string | null; code_base: string | null }]));
       let { data, error } = list;
       let colours = colourRows.data;
       const coloursError = colourRows.error;
@@ -141,7 +146,12 @@ export const getListProducts = cache(
       const byId = new Map(
         (colours ?? []).map((c) => [c.id as string, publicVariants(c.product_variants as VariantRow[], c)]),
       );
-      return ((data ?? []) as unknown as ListProduct[]).map((p) => ({ ...p, variants: byId.get(p.id) ?? [] }));
+      return ((data ?? []) as unknown as ListProduct[]).map((p) => {
+        const variants = byId.get(p.id) ?? [];
+        const c = codes.get(p.id);
+        // Sold in colours: the product's own code (LIN1); otherwise the full one (LIN2CHA).
+        return { ...p, variants, code: (variants.length > 1 ? c?.code_base : c?.code) ?? null };
+      });
     },
     ["list-products"],
     { tags: ["products"], revalidate: REVALIDATE_SECONDS },
@@ -150,7 +160,9 @@ export const getListProducts = cache(
 
 const num = (v: unknown) => (v == null ? null : Number(v));
 
-export const getProduct = cache(async (slug: string): Promise<ProductDetail | null> => {
+export const getProduct = cache(async (raw: string): Promise<ProductDetail | null> => {
+  // Addresses are product codes, which people may type in capitals: /product/LIN3RED.
+  const slug = decodeURIComponent(raw).toLowerCase();
   return unstable_cache(
     async (): Promise<ProductDetail | null> => {
       const supabase = createPublicClient();
@@ -165,11 +177,12 @@ export const getProduct = cache(async (slug: string): Promise<ProductDetail | nu
       }
       if (error) throw error;
       if (!data) return null;
-      const { data: stock } = await supabase
-        .from("products")
-        .select(`track_stock, low_stock_threshold, ${VARIANT_COLUMNS}`)
-        .eq("id", data.id)
-        .maybeSingle();
+      const [{ data: stock }, { data: codes }] = await Promise.all([
+        supabase.from("products").select(`track_stock, low_stock_threshold, ${VARIANT_COLUMNS}`).eq("id", data.id).maybeSingle(),
+        // Separate, so a database without colour codes yet still shows its colours.
+        supabase.from("product_variants").select("id, code").eq("product_id", data.id),
+      ]);
+      const codeOf = new Map((codes ?? []).map((c) => [c.id as string, c.code as string | null]));
       return {
         ...data,
         min_length_m: num(data.min_length_m),
@@ -178,7 +191,7 @@ export const getProduct = cache(async (slug: string): Promise<ProductDetail | nu
         roll_length_m: num(data.roll_length_m),
         rating_avg: Number(data.rating_avg ?? 0),
         tags: data.tags ?? [],
-        variants: stock ? publicVariants(stock.product_variants as VariantRow[], stock) : [],
+        variants: stock ? publicVariants(stock.product_variants as VariantRow[], stock).map((v) => ({ ...v, code: codeOf.get(v.id) ?? null })) : [],
       } as ProductDetail;
     },
     ["product", slug],
@@ -332,4 +345,75 @@ export async function isWishlisted(productId: string, userId: string) {
     .eq("product_id", productId)
     .eq("user_id", userId);
   return (count ?? 0) > 0;
+}
+
+/**
+ * Where an address that isn't a live product should go: an old address from before codes (blackout-lining),
+ * or a colour's own code (lin1ivo, which opens LIN1 on Ivory). Null when it is nothing we know.
+ */
+export const findProductAddress = cache(async (raw: string): Promise<string | null> => {
+  const slug = decodeURIComponent(raw).toLowerCase();
+  const supabase = createPublicClient();
+  const [{ data: old }, { data: colour }] = await Promise.all([
+    supabase.from("product_slug_redirects").select("product_id").eq("old_slug", slug).maybeSingle(),
+    supabase.from("product_variants").select("id, product_id").eq("code", slug.toUpperCase()).eq("is_active", true).maybeSingle(),
+  ]);
+  const productId = old?.product_id ?? colour?.product_id;
+  if (!productId) return null;
+  const { data: product } = await supabase.from("products_public").select("slug").eq("id", productId).maybeSingle();
+  if (!product) return null;
+  return `/product/${product.slug}${colour && !old ? `?colour=${colour.id}` : ""}`;
+});
+
+export type SearchHit = { key: string; href: string; name: string; colour: string | null; code: string | null; price_pence: number; sale_mode: "metre" | "roll" | "unit"; image: string | null };
+
+/**
+ * The header search: products found by name or by code (LIN3, LIN3RED). A code that belongs to one colour
+ * opens the product on that colour. Exact code matches come first.
+ */
+export async function searchShop(q: string, limit = 8): Promise<SearchHit[]> {
+  const term = q.trim().replace(/[%,()\\*]/g, " ").trim().slice(0, 80);
+  if (!term) return [];
+  const supabase = createPublicClient();
+  let cols = "id, slug, name, code, colour, price_pence, sale_mode, product_images(storage_path, sort_order, variant_id)";
+  let [{ data: products, error }, { data: colours }] = await Promise.all([
+    supabase.from("products_public").select(cols).or(`name.ilike.%${term}%,code.ilike.${term}%,code_base.ilike.${term}%`).order("sort_order").limit(limit),
+    supabase.from("product_variants").select("id, name, code, product_id").ilike("code", `${term}%`).eq("is_active", true).limit(limit),
+  ]);
+  // A database without product codes yet: search by name only.
+  if (coloursMissing(error)) {
+    cols = "id, slug, name, colour, price_pence, sale_mode, product_images(storage_path, sort_order, variant_id)";
+    ({ data: products, error } = await supabase.from("products_public").select(cols).ilike("name", `%${term}%`).order("sort_order").limit(limit));
+    colours = [];
+  }
+  type Row = { id: string; slug: string; name: string; code: string | null; colour: string | null; price_pence: number; sale_mode: SearchHit["sale_mode"]; product_images: { storage_path: string; sort_order: number; variant_id?: string | null }[] | null };
+  const byId = new Map(((products ?? []) as unknown as Row[]).map((p) => [p.id, p]));
+  const missing = [...new Set((colours ?? []).map((c) => c.product_id as string))].filter((id) => !byId.has(id));
+  if (missing.length) {
+    const { data } = await supabase.from("products_public").select(cols).in("id", missing);
+    for (const p of (data ?? []) as unknown as Row[]) byId.set(p.id, p);
+  }
+  const photo = (p: Row, variantId: string | null) => {
+    const imgs = [...(p.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+    return (imgs.find((i) => variantId && i.variant_id === variantId) ?? imgs.find((i) => !i.variant_id) ?? imgs[0])?.storage_path ?? null;
+  };
+  const upper = term.toUpperCase();
+  const hits: (SearchHit & { rank: number })[] = [];
+  for (const c of colours ?? []) {
+    const p = byId.get(c.product_id as string);
+    if (!p) continue; // hidden product
+    const code = c.code as string;
+    hits.push({ key: c.id as string, href: `/product/${p.slug}?colour=${c.id}`, name: p.name, colour: c.name as string, code, price_pence: p.price_pence, sale_mode: p.sale_mode, image: photo(p, c.id as string), rank: code === upper ? 0 : 1 });
+  }
+  const colourProducts = new Set((colours ?? []).map((c) => c.product_id as string));
+  for (const p of byId.values()) {
+    // Found only through one of its colours: that colour is already listed.
+    if (colourProducts.has(p.id) && !p.name.toUpperCase().includes(upper) && !(p.code ?? "").toUpperCase().startsWith(upper)) continue;
+    const code = p.code ?? null;
+    hits.push({ key: p.id, href: `/product/${p.slug}`, name: p.name, colour: p.colour, code, price_pence: p.price_pence, sale_mode: p.sale_mode, image: photo(p, null), rank: code?.toUpperCase() === upper ? 0 : code?.toUpperCase().startsWith(upper) ? 1 : 2 });
+  }
+  return hits
+    .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name))
+    .slice(0, limit)
+    .map((h) => ({ key: h.key, href: h.href, name: h.name, colour: h.colour, code: h.code, price_pence: h.price_pence, sale_mode: h.sale_mode, image: h.image }));
 }

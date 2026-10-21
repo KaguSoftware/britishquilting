@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { saveManualCustomer } from "@/lib/actions/admin/invoices";
-import type { ManualCustomer } from "@/lib/invoices";
+import { customerNo, type ManualCustomer } from "@/lib/invoices";
 import { Button, Field, Input, Textarea } from "../ui";
 import { Modal, useAction } from "../controls";
 
-type Form = Omit<ManualCustomer, "id" | "full_name"> & {
+type Form = Omit<ManualCustomer, "id" | "full_name" | "number"> & {
   id?: string;
   full_name: string;
 };
@@ -40,8 +40,12 @@ export function CustomerModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={customer ? "Edit customer" : "Add a customer"}
-      description="Only the name is needed. Add a phone number to call them from the list."
+      title={customer ? `Edit customer ${customerNo(customer.number)}` : "Add a customer"}
+      description={
+        customer
+          ? "Only the name is needed. Add a phone number to call them from the list."
+          : "Only the name is needed. They get the next customer number, like C1001, when you add them."
+      }
       wide
     >
       {/* Mounted fresh each time the modal opens, so it always starts from this customer. */}

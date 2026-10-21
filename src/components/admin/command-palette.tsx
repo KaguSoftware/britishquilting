@@ -14,6 +14,8 @@ const QUICK: Row[] = [
   { key: "new-product", title: "Add a new product", href: "/admin/products/new", icon: IconPlus, group: "Quick actions" },
   { key: "to-pack", title: "Orders to pack", href: "/admin/orders?tab=to_pack&view=board", icon: IconParcel, group: "Quick actions" },
   { key: "new-discount", title: "Create a discount code", href: "/admin/discounts?new=1", icon: IconPlus, group: "Quick actions" },
+  { key: "new-invoice", title: "Write an invoice", href: "/admin/invoices/new", icon: IconPlus, group: "Quick actions" },
+  { key: "new-delivery-note", title: "Write a delivery note", href: "/admin/delivery-notes/new", icon: IconPlus, group: "Quick actions" },
   { key: "new-post", title: "Write a journal post", href: "/admin/journal/new", icon: IconPlus, group: "Quick actions" },
   { key: "new-expense", title: "Add an expense", href: "/admin/finance?expense=new", icon: IconPlus, group: "Quick actions", owner: true },
   { key: "profit", title: "Profit and VAT this month", href: "/admin/finance", icon: IconChart, group: "Quick actions", owner: true },

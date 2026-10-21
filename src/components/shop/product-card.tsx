@@ -17,6 +17,8 @@ export type ProductCardData = {
   rating_avg: number;
   rating_count: number;
   product_images?: { storage_path: string; alt: string | null; sort_order: number; variant_id?: string | null }[];
+  /** e.g. LIN3, shown small beside the price */
+  code?: string | null;
   /** the colours it comes in, when sold in more than one */
   variants?: { id: string; name: string; colour_hex: string | null; in_stock: boolean }[];
 };
@@ -72,12 +74,15 @@ export function ProductCard({ p, sizes = "(min-width: 768px) 25vw, 50vw" }: { p:
           </span>
         )}
       </div>
-      <p className="mt-2 text-sm">
-        <span className="tabular-nums">{formatPence(p.price_pence)}</span>
-        <span className="text-ink-soft"> {unitLabel[p.sale_mode]}</span>
-        {p.compare_at_pence != null && p.compare_at_pence > p.price_pence && (
-          <span className="ml-2 text-ink-soft line-through">{formatPence(p.compare_at_pence)}</span>
-        )}
+      <p className="mt-2 flex items-baseline justify-between gap-3 text-sm">
+        <span>
+          <span className="tabular-nums">{formatPence(p.price_pence)}</span>
+          <span className="text-ink-soft"> {unitLabel[p.sale_mode]}</span>
+          {p.compare_at_pence != null && p.compare_at_pence > p.price_pence && (
+            <span className="ml-2 text-ink-soft line-through">{formatPence(p.compare_at_pence)}</span>
+          )}
+        </span>
+        {p.code && <span className="shrink-0 text-xs tabular-nums text-ink-soft">{p.code}</span>}
       </p>
       {colours.length > 1 && (
         <p className="mt-2.5 flex items-center gap-2 text-xs text-ink-soft">

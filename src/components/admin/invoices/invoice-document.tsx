@@ -1,150 +1,235 @@
 import type { ReactNode } from "react";
-import { PrintButton } from "@/components/admin/orders/print-button";
+import type { DocAction } from "@/lib/doc-action";
+import { DocumentToolbar } from "@/components/admin/documents/document-toolbar";
+import { AddressBox, AddressLines, Letterhead, PAD, Paper, Sheet, paginate } from "@/components/admin/documents/sheet";
 
 /** Everything an invoice prints, already formatted. Order and manual invoices both map into this. */
 export type InvoiceDoc = {
-  label: string;
-  issued: string;
-  due?: string | null;
-  status: string;
-  reference?: { label: string; value: string } | null;
-  billTo: string[];
-  email?: string | null;
-  phone?: string | null;
-  lines: {
-    key: string;
-    description: string;
-    quantity: string;
-    unit: string;
-    amount: string;
-  }[];
-  /** Rows above the total, e.g. subtotal, discount, delivery. */
-  adjustments?: { label: string; value: string }[];
+  number: string;
+  date: string;
+  delNoteNo?: string | null;
+  customerCode?: string | null;
+  poNumber?: string | null;
+  invoiceTo: string[];
+  deliverTo: string[];
+  lines: { key: string; code?: string | null; quantity: string; description: string; price: string; amount: string }[];
+  /** Rows under the goods: discount, delivery, payment due, notes. */
+  extras?: { key: string; description: string; amount?: string | null }[];
+  net: string;
+  vat: string;
   total: string;
-  vat?: string | null;
-  note?: string | null;
 };
 
-/** Placeholder text, shown dashed so it is obvious what still needs real details. */
-function Placeholder({ children }: { children: ReactNode }) {
-  return <span className="border-b border-dashed border-black/40 text-black/55">{children}</span>;
+export const INVOICE_SHEET_ID = "invoice-sheet";
+
+/** Lines that fit on one invoice page. */
+export const INVOICE_ROWS = 14;
+const ADDRESS = ["Unit S,", "OYO Business Units", "Hindmans Way", "Dagenham RM9 6LN"];
+const COLS = "grid grid-cols-[86px_78px_1fr_100px_112px] gap-x-2 px-[16px]";
+
+/** One line of goods. On screen, `action` sits in the sheet's right margin, level with the line. */
+export function InvoiceRow({
+  code,
+  quantity,
+  description,
+  price,
+  amount,
+  muted,
+  action,
+}: {
+  code?: ReactNode;
+  quantity?: ReactNode;
+  description?: ReactNode;
+  price?: ReactNode;
+  amount?: ReactNode;
+  muted?: boolean;
+  action?: ReactNode;
+}) {
+  return (
+    <div className={`${COLS} relative h-[25px] items-end font-sans text-[13.5px] ${muted ? "italic opacity-70" : ""}`} style={{ color: PAD.pen }}>
+      <span className="truncate">{code}</span>
+      <span className="truncate tabular-nums">{quantity}</span>
+      <span className="truncate">{description}</span>
+      <span className="text-right tabular-nums">{price}</span>
+      <span className="text-right tabular-nums">{amount}</span>
+      {/* In the sheet's right margin, level with the line. */}
+      {action && <span className="absolute -right-[38px] bottom-[1px] print:hidden">{action}</span>}
+    </div>
+  );
 }
 
-// Placeholder layout. The final invoice design will replace this once we have the example.
-export function InvoiceDocument({ doc }: { doc: InvoiceDoc }) {
+function Entry({ label, children }: { label: string; children?: ReactNode }) {
   return (
-    <div className="min-h-svh bg-white text-black print:min-h-0">
-      <style>{`@page { size: A4; margin: 14mm; } @media print { .grain::after { display: none !important; } body { background: #fff !important; } }`}</style>
-      <div className="mx-auto max-w-[760px] px-8 py-10 print:p-0">
-        <div className="mb-8 flex items-center justify-between gap-4 print:hidden">
-          <p className="text-sm text-stone-500">To save a PDF, choose &ldquo;Save as PDF&rdquo; as the printer.</p>
-          <PrintButton auto={false} label="Save as PDF" />
-        </div>
-
-        <header className="flex items-start justify-between border-b-2 border-black pb-5">
-          <div>
-            <p className="font-display text-3xl">British Quilting</p>
-            <p className="mt-1 text-sm leading-relaxed">
-              <Placeholder>Business address</Placeholder>
-              <br />
-              <Placeholder>VAT number</Placeholder>
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="font-display text-4xl">Invoice</p>
-            <p className="mt-1 font-display text-xl tabular-nums">{doc.label}</p>
-          </div>
-        </header>
-
-        <section className="grid grid-cols-2 gap-8 py-6">
-          <div>
-            <p className="mb-1 text-xs font-semibold">Bill to</p>
-            <address className="text-base not-italic leading-snug">
-              {doc.billTo.map((l, i) => (
-                <span key={i} className="block">
-                  {l}
-                </span>
-              ))}
-            </address>
-            {doc.email && <p className="mt-2 text-sm">{doc.email}</p>}
-            {doc.phone && <p className="text-sm tabular-nums">{doc.phone}</p>}
-          </div>
-          <dl className="grid grid-cols-[auto_1fr] content-start gap-x-4 gap-y-1 text-sm">
-            <dt className="font-semibold">Invoice date</dt>
-            <dd className="text-right">{doc.issued}</dd>
-            {doc.reference && (
-              <>
-                <dt className="font-semibold">{doc.reference.label}</dt>
-                <dd className="text-right tabular-nums">{doc.reference.value}</dd>
-              </>
-            )}
-            {doc.due && (
-              <>
-                <dt className="font-semibold">Payment due</dt>
-                <dd className="text-right">{doc.due}</dd>
-              </>
-            )}
-            <dt className="font-semibold">Status</dt>
-            <dd className="text-right">{doc.status}</dd>
-          </dl>
-        </section>
-
-        <table className="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-y-2 border-black text-xs">
-              <th className="py-2">Description</th>
-              <th className="py-2 text-right">Quantity</th>
-              <th className="py-2 text-right">Unit price</th>
-              <th className="py-2 text-right">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {doc.lines.map((l) => (
-              <tr key={l.key} className="border-b border-black/20 align-top">
-                <td className="py-3 pr-4">{l.description}</td>
-                <td className="py-3 text-right tabular-nums">{l.quantity}</td>
-                <td className="py-3 text-right tabular-nums">{l.unit}</td>
-                <td className="py-3 text-right tabular-nums">{l.amount}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <dl className="ml-auto mt-4 grid w-72 grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm tabular-nums">
-          {doc.adjustments?.map((a) => (
-            <div key={a.label} className="contents">
-              <dt>{a.label}</dt>
-              <dd className="text-right">{a.value}</dd>
-            </div>
-          ))}
-          <dt className="mt-2 border-t-2 border-black pt-2 font-semibold">Total</dt>
-          <dd className="mt-2 border-t-2 border-black pt-2 text-right font-display text-2xl">{doc.total}</dd>
-          {doc.vat && (
-            <>
-              <dt className="text-xs">Includes VAT of</dt>
-              <dd className="text-right text-xs">{doc.vat}</dd>
-            </>
-          )}
-        </dl>
-
-        {doc.note && (
-          <section className="mt-8 text-sm">
-            <p className="font-semibold">Notes</p>
-            <p className="mt-1 whitespace-pre-line leading-relaxed">{doc.note}</p>
-          </section>
-        )}
-
-        <section className="mt-10 border border-dashed border-black/40 p-4 text-sm">
-          <p className="font-semibold">Payment details</p>
-          <p className="mt-1 leading-relaxed">
-            <Placeholder>Bank name, sort code and account number</Placeholder>
-            <br />
-            <Placeholder>Payment terms</Placeholder>
-          </p>
-        </section>
-
-        <footer className="mt-10 border-t border-black pt-4 text-center text-sm">Thank you for shopping with British Quilting. Family-run in London since 1990.</footer>
-      </div>
+    <div className="flex h-[28px] items-center gap-1.5 whitespace-nowrap text-[14px]">
+      <span className="shrink-0">{label} :</span>
+      <span className="min-w-0 flex-1 truncate font-sans" style={{ color: PAD.pen }}>
+        {children}
+      </span>
     </div>
+  );
+}
+
+function Cell({ label, children, last }: { label: string; children?: ReactNode; last?: boolean }) {
+  return (
+    <>
+      <div className={"px-2.5 pt-2 text-[14px] text-white " + (last ? "" : "border-b border-white/35")} style={{ background: PAD.navy }}>
+        {label}
+      </div>
+      <div className={"flex items-center justify-end px-3 font-sans text-[15px] tabular-nums " + (last ? "font-semibold" : "border-b")} style={{ borderColor: PAD.ink, color: PAD.pen }}>
+        {children}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The invoice pad. Every box takes either printed text or, in the editor, a field to fill in.
+ * `grow` lets a long invoice run past A4 on screen.
+ */
+export function InvoiceSheet({
+  number,
+  date,
+  page,
+  delNoteNo,
+  customerCode,
+  poNumber,
+  invoiceTo,
+  invoiceToAction,
+  deliverTo,
+  deliverToAction,
+  rows,
+  net,
+  vat,
+  total,
+  grow,
+}: {
+  number: ReactNode;
+  date: ReactNode;
+  page: ReactNode;
+  delNoteNo?: ReactNode;
+  customerCode?: ReactNode;
+  poNumber?: ReactNode;
+  invoiceTo: ReactNode;
+  invoiceToAction?: ReactNode;
+  deliverTo: ReactNode;
+  deliverToAction?: ReactNode;
+  rows: ReactNode[];
+  net?: ReactNode;
+  vat?: ReactNode;
+  total?: ReactNode;
+  grow?: boolean;
+}) {
+  return (
+    <Sheet grow={grow} className="px-[56px] pb-[26px] pt-[34px]">
+      <header className="grid grid-cols-[1fr_210px]">
+        <div>
+          <Letterhead variant="invoice" className="h-[96px] w-[273px]" />
+          <address className="mt-[14px] text-[16px] not-italic leading-[24px]">
+            {ADDRESS.map((l) => (
+              <span key={l} className="block">
+                {l}
+              </span>
+            ))}
+          </address>
+        </div>
+        <div className="pt-[10px]">
+          <h1 className="text-[34px] leading-none" style={{ color: PAD.navy }}>
+            Invoice
+          </h1>
+          <div className="mt-[14px]">
+            <Entry label="Number">{number}</Entry>
+            <Entry label="Date">{date}</Entry>
+            <Entry label="Page">{page}</Entry>
+            <Entry label="DEL Note No">{delNoteNo}</Entry>
+            <Entry label="Customer Code">{customerCode}</Entry>
+            <Entry label="PO Number">{poNumber}</Entry>
+          </div>
+        </div>
+      </header>
+
+      <section className="mt-[18px] grid grid-cols-2 gap-[30px]">
+        <AddressBox label="Invoice To :" height={160} action={invoiceToAction}>
+          {invoiceTo}
+        </AddressBox>
+        <AddressBox label="Deliver To :" height={160} action={deliverToAction}>
+          {deliverTo}
+        </AddressBox>
+      </section>
+
+      <div className={`${COLS} mt-[26px] h-[46px] items-center rounded-[8px] text-[18px] text-white`} style={{ background: PAD.navy }}>
+        <span>CODE</span>
+        <span>QTY</span>
+        <span className="text-center">DESCRIPTION</span>
+        <span className="text-right">PRICE</span>
+        <span className="text-right">AMOUNT</span>
+      </div>
+      <div className="min-h-[358px] flex-1 pt-[8px]">{rows}</div>
+
+      <footer>
+        <div className="grid h-[146px] grid-cols-[298px_176px_72px_1fr] overflow-hidden rounded-[10px] border-[1.5px]" style={{ borderColor: PAD.ink }}>
+          <div className="space-y-[9px] border-r pl-[32px] pt-[22px] text-[14px]" style={{ borderColor: PAD.ink }}>
+            <p>Email : sales@britishquilting.com</p>
+            <p>Tel : 02033498200</p>
+            <p>VAT Number : 714379429</p>
+            <p>Company Number : 3335461</p>
+          </div>
+          <div className="space-y-[9px] pl-[24px] pt-[22px] text-[14px]">
+            <p>Intermode Ltd.</p>
+            <p>Natwest Bank</p>
+            <p>Sort Code : 60-80-01</p>
+            <p>Acc. No : 37341553</p>
+          </div>
+          <div className="col-span-2 grid grid-cols-[72px_1fr] grid-rows-3">
+            <Cell label="NET">{net}</Cell>
+            <Cell label="VAT">{vat}</Cell>
+            <Cell label="TOTAL" last>
+              {total}
+            </Cell>
+          </div>
+        </div>
+        <p className="mt-[14px] text-center text-[11px] leading-[19px]">
+          * The title of these goods remain the property of British Quilting until they are paid for in full. No claims on cut goods.
+          <br />
+          Examine delivery before cutting. Any shortage or discrepancies on delivery must be notified within 3 days from delivery.
+        </p>
+      </footer>
+    </Sheet>
+  );
+}
+
+type RowData = { key: string; code?: string | null; quantity?: string; description: string; price?: string; amount?: string | null; muted?: boolean };
+
+/** A saved invoice, printed: one A4 sheet per 14 lines. */
+export function InvoiceDocument({ doc, action }: { doc: InvoiceDoc; action?: DocAction | null }) {
+  const rows: RowData[] = [...doc.lines, ...(doc.extras ?? [])];
+  // Leave the last line of a full page for "Continued".
+  const pages = paginate(rows, INVOICE_ROWS - 1);
+
+  return (
+    <Paper id={INVOICE_SHEET_ID} toolbar={<DocumentToolbar target={INVOICE_SHEET_ID} filename={`Invoice ${doc.number}`} auto={action} />}>
+      {pages.map((pageRows, p) => {
+        const last = p === pages.length - 1;
+        const filled: RowData[] = last ? pageRows : [...pageRows, { key: "more", description: `Continued on page ${p + 2}`, muted: true }];
+        return (
+          <InvoiceSheet
+            key={p}
+            number={doc.number}
+            date={doc.date}
+            page={`${p + 1} of ${pages.length}`}
+            delNoteNo={doc.delNoteNo}
+            customerCode={doc.customerCode}
+            poNumber={doc.poNumber}
+            invoiceTo={<AddressLines lines={doc.invoiceTo} />}
+            deliverTo={<AddressLines lines={doc.deliverTo} />}
+            rows={filled.map(({ key, ...r }) => (
+              <InvoiceRow key={key} {...r} />
+            ))}
+            net={last && doc.net}
+            vat={last && doc.vat}
+            total={last && doc.total}
+          />
+        );
+      })}
+    </Paper>
   );
 }

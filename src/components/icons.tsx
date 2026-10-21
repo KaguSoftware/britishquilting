@@ -327,6 +327,12 @@ export const IconUpload = (p: IconProps) => (
     <path d="M4 14.5v5.5h16v-5.5" />
   </Svg>
 );
+export const IconDownload = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 3.5V15" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" />
+    <path d="M4 14.5v5.5h16v-5.5" />
+  </Svg>
+);
 export const IconImage = (p: IconProps) => (
   <Svg {...p}>
     <rect x="3.5" y="4.5" width="17" height="15" rx="1" />
@@ -339,6 +345,15 @@ export const IconDocument = (p: IconProps) => (
     <path d="M6 3.5h8l4.5 4.5v12.5H6Z" />
     <path d="M14 3.5V8h4.5" />
     <Stitch d="M9 12.5h6.5M9 15.5h6.5M9 18.5h4" />
+  </Svg>
+);
+/** A delivery note on a clipboard, signed off with a tick */
+export const IconDeliveryNote = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M8.5 4.5H5.5v16h13v-16h-3" />
+    <path d="M8.5 3.5h7v2.5h-7z" />
+    <Stitch d="M8.5 10h7M8.5 13h7" />
+    <path d="m9 17 1.6 1.5L14 15.5" />
   </Svg>
 );
 export const IconChart = (p: IconProps) => (

@@ -4,7 +4,9 @@ import { staffDb } from "@/lib/actions/admin/guard";
 import { formatPence } from "@/lib/utils";
 import { formatDate } from "@/components/admin/format";
 import { InvoiceDocument } from "@/components/admin/invoices/invoice-document";
-import { billToLines, lineAmount, manualInvoiceNo, type ManualInvoice } from "@/lib/invoices";
+import { docAction } from "@/lib/doc-action";
+import { addressBlock, customerNo, lineAmount, manualInvoiceNo, type ManualInvoice } from "@/lib/invoices";
+import { padDate } from "@/lib/delivery-notes";
 
 const isId = (id: string) => /^[0-9a-f-]{36}$/i.test(id);
 
@@ -21,36 +23,50 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function ManualInvoicePrintPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function ManualInvoicePrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ do?: string }> }) {
+  const [{ id }, sp] = await Promise.all([params, searchParams]);
   if (!isId(id)) notFound();
   const { db } = await staffDb();
-  const { data } = await db.from("invoices").select("*").eq("id", id).maybeSingle();
+  const { data } = await db.from("invoices").select("*, delivery_note:delivery_notes(number)").eq("id", id).maybeSingle();
   if (!data) notFound();
-  const inv = data as ManualInvoice;
+  const inv = data as ManualInvoice & { delivery_note: { number: number } | { number: number }[] | null };
+  const dn = Array.isArray(inv.delivery_note) ? inv.delivery_note[0] : inv.delivery_note;
+  const qty = (n: number) => Number(n).toLocaleString("en-GB", { maximumFractionDigits: 2 });
+  const invoiceTo = addressBlock(inv.bill_to);
 
   return (
     <InvoiceDocument
+      action={docAction(sp.do)}
       doc={{
-        label: manualInvoiceNo(inv.number),
-        issued: formatDate(inv.issued_on),
-        due: inv.due_on ? formatDate(inv.due_on) : null,
-        status: inv.paid_at ? `Paid ${formatDate(inv.paid_at)}` : "Awaiting payment",
-        billTo: billToLines(inv.bill_to),
-        email: inv.bill_to.email,
-        phone: inv.bill_to.phone,
+        number: manualInvoiceNo(inv.number),
+        date: padDate(inv.issued_on),
+        delNoteNo: dn ? String(dn.number) : null,
+        customerCode: inv.customer_code ?? (inv.bill_to.number ? customerNo(inv.bill_to.number) : null),
+        poNumber: inv.po_number,
+        invoiceTo,
+        deliverTo: (inv.deliver_to ?? "").split("\n").filter((l) => l.trim()),
         lines: inv.items.map((l, i) => ({
           key: String(i),
+          code: l.code,
+          quantity: qty(l.quantity),
           description: l.description,
-          quantity: Number(l.quantity).toLocaleString("en-GB", {
-            maximumFractionDigits: 2,
-          }),
-          unit: formatPence(l.unit_price_pence),
+          price: formatPence(l.unit_price_pence),
           amount: formatPence(lineAmount(l)),
         })),
+        extras: [
+          ...(inv.paid_at
+            ? [{ key: "paid", description: `Paid with thanks, ${formatDate(inv.paid_at)}` }]
+            : inv.due_on
+              ? [{ key: "due", description: `Payment due by ${formatDate(inv.due_on)}` }]
+              : []),
+          ...(inv.note ?? "")
+            .split("\n")
+            .filter((l) => l.trim())
+            .map((l, i) => ({ key: `note-${i}`, description: l })),
+        ],
+        net: formatPence(inv.total_pence - inv.vat_included_pence),
+        vat: formatPence(inv.vat_included_pence),
         total: formatPence(inv.total_pence),
-        vat: inv.vat_included_pence > 0 ? formatPence(inv.vat_included_pence) : null,
-        note: inv.note,
       }}
     />
   );

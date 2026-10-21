@@ -127,17 +127,11 @@ export function ProductEditor({
           <Field label="Description" htmlFor="desc" hint="Tell customers what it is, what it's for and why they'll love it. Leave a blank line between paragraphs.">
             <Textarea id="desc" value={form.description} onChange={(e) => set("description", e.target.value)} className="min-h-40" />
           </Field>
-          <Field label="Web address" htmlFor="slug" hint="Made from the name automatically. Only change it if you need to.">
-            <div className="flex items-center rounded-[3px] border border-stone-300 bg-white focus-within:border-aubergine-500">
-              <span className="pl-3 text-sm text-stone-500">/product/</span>
-              <input
-                id="slug"
-                value={form.slug}
-                onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value) || e.target.value.toLowerCase(), slugTouched: true }))}
-                className="h-11 flex-1 bg-transparent pr-3 text-[0.95rem] focus:outline-none"
-              />
-            </div>
-          </Field>
+          <div className="flex flex-col gap-1.5">
+            <p className="text-sm font-medium text-ink">Web address</p>
+            <p className="text-[0.95rem] tabular-nums text-ink-soft">{isNew ? "Given when you save: the product's code, e.g. /product/lin3" : `/product/${form.slug}`}</p>
+            <p className="text-xs text-stone-500">Always the product code, so it changes if the product moves category. Old addresses keep working.</p>
+          </div>
         </Section>
 
         <Section

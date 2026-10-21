@@ -120,15 +120,14 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
   }
   const { db, viewer } = await staffDb();
   const { images, variants, isNew, id, cost_price_pence, ...p } = parsed.data;
-  const slug = slugify(p.slug || p.name);
-  if (!slug) return fail("Please give the product a name");
-
-  const { data: clash } = await db.from("products").select("id").eq("slug", slug).neq("id", id).maybeSingle();
-  if (clash) return fail(`Another product already uses the web address "${slug}". Please change it.`);
+  // The web address is the product code, which the database sets (see the product_code_slugs migration).
+  // A new product needs something to start with until it gets its code.
+  const fields: Omit<typeof p, "slug"> & { slug?: string } = { ...p };
+  delete fields.slug;
+  if (!slugify(p.name)) return fail("Please give the product a name");
 
   const row = {
-    ...p,
-    slug,
+    ...fields,
     // Keep the fields that don't apply to this way of selling tidy
     min_length_m: p.sale_mode === "metre" ? p.min_length_m : null,
     length_step_m: p.sale_mode === "metre" ? p.length_step_m : null,
@@ -144,7 +143,7 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
   let previousSlug: string | undefined;
   const { data: oldVariants } = isNew ? { data: [] } : await db.from("product_variants").select("id, stock_qty, is_active").eq("product_id", id);
   if (isNew) {
-    const { error } = await db.from("products").insert({ id, ...row });
+    const { error } = await db.from("products").insert({ id, ...row, slug: `${slugify(p.name)}-${id.slice(0, 8)}` });
     if (error) return fail("Couldn't create the product. Please try again.");
   } else {
     const { data: prev } = await db.from("products").select("stock_qty, slug").eq("id", id).maybeSingle();
@@ -200,6 +199,8 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
     for (const v of variants) if (v.is_active) notified += await notifyIfRestocked(db, id, was.get(v.id) ?? 0, v.stock_qty, v.id);
   }
   await audit(db, viewer.id, isNew ? "product.create" : "product.update", "product", id, { name: p.name });
+  const { data: saved } = await db.from("products").select("slug").eq("id", id).maybeSingle();
+  const slug = saved?.slug as string | undefined;
   refresh(id, slug);
   if (previousSlug && previousSlug !== slug) revalidateTag(`product:${previousSlug}`, { expire: 0 });
   return ok(

@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { IconDocument, IconPencil, IconPhone, IconPlus, IconTrash, IconUsers } from "@/components/icons";
+import { IconDeliveryNote, IconDocument, IconPencil, IconPhone, IconPlus, IconTrash, IconUsers } from "@/components/icons";
 import { deleteManualCustomer } from "@/lib/actions/admin/invoices";
-import { telHref, type ManualCustomer } from "@/lib/invoices";
+import { customerNo, telHref, type ManualCustomer } from "@/lib/invoices";
 import { Button, ButtonLink, EmptyState, btn } from "../ui";
 import { useAction, useConfirm } from "../controls";
 import { CustomerModal } from "@/components/admin/customers/customer-modal";
@@ -32,7 +33,7 @@ export function CustomerBook({ customers, searching, adding }: { customers: Manu
   const remove = async (c: ManualCustomer) => {
     const yes = await confirm({
       title: `Remove ${c.full_name}?`,
-      description: "Invoices already written for them keep their details.",
+      description: "Invoices and delivery notes already written for them keep their details.",
       confirmLabel: "Remove",
       danger: true,
     });
@@ -75,7 +76,10 @@ export function CustomerBook({ customers, searching, adding }: { customers: Manu
               {customers.map((c) => (
                 <tr key={c.id} className="block px-4 py-3 md:table-row md:p-0">
                   <td className="block md:table-cell md:px-5 md:py-3.5">
-                    <span className="font-medium">{c.full_name}</span>
+                    <span className="mr-2 text-xs tabular-nums text-stone-500">{customerNo(c.number)}</span>
+                    <Link href={`/admin/customers/manual/${c.id}`} className="font-medium text-aubergine-900 hover:underline">
+                      {c.full_name}
+                    </Link>
                     {c.company && <span className="block text-xs text-stone-500">{c.company}</span>}
                     {c.email && (
                       <a href={`mailto:${c.email}`} className="block text-xs text-stone-500 hover:text-aubergine-700">
@@ -96,8 +100,14 @@ export function CustomerBook({ customers, searching, adding }: { customers: Manu
                           <IconPhone className="size-4" /> Call
                         </a>
                       )}
+                      <ButtonLink href={`/admin/customers/manual/${c.id}`} variant="secondary" size="sm" title="Their invoices and delivery notes">
+                        <IconDocument className="size-4" /> Documents
+                      </ButtonLink>
                       <ButtonLink href={`/admin/invoices/new?customer=${c.id}`} size="sm">
                         <IconDocument className="size-4" /> New invoice
+                      </ButtonLink>
+                      <ButtonLink href={`/admin/delivery-notes/new?customer=${c.id}`} size="sm">
+                        <IconDeliveryNote className="size-4" /> New delivery note
                       </ButtonLink>
                       <Button variant="ghost" size="sm" onClick={() => edit(c)} aria-label={`Edit ${c.full_name}`}>
                         <IconPencil className="size-4" />

@@ -14,7 +14,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   const [{ data: product }, { data: images }, { data: variants }, { data: categories }, { count: waiting }] = await Promise.all([
     db.from("products").select("*").eq("id", id).maybeSingle(),
     db.from("product_images").select("id, storage_path, alt, width, height, variant_id").eq("product_id", id).order("sort_order"),
-    db.from("product_variants").select("id, name, colour_hex, stock_qty, is_active").eq("product_id", id).order("sort_order"),
+    db.from("product_variants").select("id, name, code, colour_hex, stock_qty, is_active").eq("product_id", id).order("sort_order"),
     db.from("categories").select("id, name").order("sort_order"),
     db.from("stock_alerts").select("id", { count: "exact", head: true }).eq("product_id", id).is("notified_at", null),
   ]);
@@ -27,6 +27,11 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         description={
           <span className="flex flex-wrap items-center gap-2">
             {product.is_active ? <Badge tone="green">On the shop</Badge> : <Badge>Hidden</Badge>}
+            {product.code_base && (
+              <span className="tabular-nums">
+                Code {(variants ?? []).length ? (variants ?? []).map((v) => v.code).filter(Boolean).join(", ") : product.code}
+              </span>
+            )}
             {!!waiting && <span>{waiting} {waiting === 1 ? "person is" : "people are"} waiting to hear when it&apos;s back in stock.</span>}
           </span>
         }

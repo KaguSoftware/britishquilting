@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { IconChevronLeft, IconChevronRight, IconDocument, IconPhone, IconPlus } from "@/components/icons";
+import { IconChevronLeft, IconChevronRight, IconDocument, IconDownload, IconPhone, IconPlus, IconPrint } from "@/components/icons";
 import { staffDb } from "@/lib/actions/admin/guard";
 import { manualInvoiceNo, telHref, type BillTo } from "@/lib/invoices";
 import { cn, formatPence } from "@/lib/utils";
@@ -176,7 +176,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: SP 
     <div>
       <PageHeader
         title="Invoices"
-        description="Invoices for shop orders and ones written by hand, ready to save as a PDF. Ring a customer straight from the list."
+        description="Invoices for shop orders and ones written by hand, ready to print or download as a PDF. Ring a customer straight from the list."
         actions={
           <ButtonLink href="/admin/invoices/new">
             <IconPlus className="size-4" /> New invoice
@@ -290,8 +290,11 @@ export default async function InvoicesPage({ searchParams }: { searchParams: SP 
                           <IconPhone className="size-4" /> Call
                         </a>
                       )}
-                      <ButtonLink href={r.pdf} target="_blank" size="sm">
-                        <IconDocument className="size-4" /> PDF
+                      <ButtonLink href={`${r.pdf}?do=print`} target="_blank" variant="secondary" size="sm">
+                        <IconPrint className="size-4" /> Print
+                      </ButtonLink>
+                      <ButtonLink href={`${r.pdf}?do=pdf`} target="_blank" size="sm">
+                        <IconDownload className="size-4" /> PDF
                       </ButtonLink>
                     </div>
                   </td>

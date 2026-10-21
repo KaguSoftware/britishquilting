@@ -12,6 +12,8 @@ import type { ActionResult } from "@/lib/actions/admin/types";
 export type ProductRow = {
   id: string;
   name: string;
+  /** e.g. LIN3; each colour adds its letters (LIN3RED) */
+  code: string | null;
   colour: string | null;
   colour_hex: string | null;
   sale_mode: "metre" | "roll" | "unit";
@@ -130,6 +132,7 @@ function Name({ p }: { p: ProductRow }) {
       </Link>
       <p className="truncate text-xs text-stone-500">
         {[
+          p.code,
           p.variants.length ? `${p.variants.length} ${p.variants.length === 1 ? "colour" : "colours"}` : p.colour,
           p.category,
           p.is_featured ? "Featured" : null,
