@@ -12,23 +12,29 @@ export type Viewer = {
 };
 
 /**
- * The signed-in user (verified with Supabase Auth), or null. Asked once per request: the layouts and the page
- * all need it, and each lookup is two trips to Supabase.
+ * The signed-in user (from the verified session JWT), or null. Asked once per request: the layouts and the page
+ * all need it. The custom access token hook stamps role and name onto the token, so this is usually no trip to
+ * Supabase at all; tokens issued before the hook was enabled fall back to a profiles lookup.
  */
 export const getViewer = cache(async function getViewer(): Promise<Viewer | null> {
   const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return null;
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, role, email")
-    .eq("id", data.user.id)
-    .maybeSingle();
-  const role = (profile?.role ?? "customer") as Viewer["role"];
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (!claims?.sub) return null;
+  const meta = claims.user_metadata as { full_name?: string } | undefined;
+  let role = claims.user_role as Viewer["role"] | undefined;
+  let fullName = claims.full_name as string | null | undefined;
+  let email = (claims.email as string | undefined) || null;
+  if (!role) {
+    const { data: profile } = await supabase.from("profiles").select("full_name, role, email").eq("id", claims.sub).maybeSingle();
+    role = (profile?.role ?? "customer") as Viewer["role"];
+    fullName = profile?.full_name;
+    email ??= profile?.email ?? null;
+  }
   return {
-    id: data.user.id,
-    email: data.user.email ?? profile?.email ?? null,
-    fullName: profile?.full_name ?? (data.user.user_metadata?.full_name as string | undefined) ?? null,
+    id: claims.sub,
+    email,
+    fullName: fullName ?? meta?.full_name ?? null,
     role,
     isStaff: role === "staff" || role === "owner",
   };

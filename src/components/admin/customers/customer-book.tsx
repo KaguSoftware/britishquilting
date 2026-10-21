@@ -1,16 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { IconDeliveryNote, IconDocument, IconPencil, IconPhone, IconPlus, IconTrash, IconUsers } from "@/components/icons";
 import { deleteManualCustomer } from "@/lib/actions/admin/invoices";
 import { customerNo, telHref, type ManualCustomer } from "@/lib/invoices";
-import { Button, ButtonLink, EmptyState, btn } from "../ui";
+import { Menu } from "@/components/ui/menu";
+import { Button, EmptyState, btn } from "../ui";
 import { useAction, useConfirm } from "../controls";
+import { ListFrame, ListHead, ListRow } from "../list-row";
 import { CustomerModal } from "@/components/admin/customers/customer-modal";
 
-/** Customers added by hand on the Customers page, with a call button on each. `adding` opens the form straight away. */
+/** Customers added by hand on the Customers page. `adding` opens the form straight away. */
 export function CustomerBook({ customers, searching, adding }: { customers: ManualCustomer[]; searching: boolean; adding: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -48,7 +49,7 @@ export function CustomerBook({ customers, searching, adding }: { customers: Manu
           title={searching ? "No customers match that search" : "No customers yet"}
           description={
             searching
-              ? "Try part of their name, company, email or phone number."
+              ? "Try part of their name, company, email, phone number or CID."
               : "Add people who buy without a website account, like phone orders, trade accounts and show customers."
           }
           action={
@@ -60,68 +61,40 @@ export function CustomerBook({ customers, searching, adding }: { customers: Manu
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-[3px] border border-ink/12 bg-cream-50">
-          <table className="w-full text-sm">
-            <thead className="hidden border-b border-ink/15 text-left text-xs text-stone-500 md:table-header-group">
-              <tr>
-                <th className="px-5 py-3 font-medium">Customer</th>
-                <th className="px-3 py-3 font-medium">Telephone</th>
-                <th className="px-3 py-3 font-medium">Address</th>
-                <th className="px-5 py-3">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink/10">
-              {customers.map((c) => (
-                <tr key={c.id} className="block px-4 py-3 md:table-row md:p-0">
-                  <td className="block md:table-cell md:px-5 md:py-3.5">
-                    <span className="mr-2 text-xs tabular-nums text-stone-500">{customerNo(c.number)}</span>
-                    <Link href={`/admin/customers/manual/${c.id}`} className="font-medium text-aubergine-900 hover:underline">
-                      {c.full_name}
-                    </Link>
-                    {c.company && <span className="block text-xs text-stone-500">{c.company}</span>}
-                    {c.email && (
-                      <a href={`mailto:${c.email}`} className="block text-xs text-stone-500 hover:text-aubergine-700">
-                        {c.email}
-                      </a>
-                    )}
-                  </td>
-                  <td className="mt-1 block md:mt-0 md:table-cell md:px-3 md:py-3.5">
-                    {c.phone ? <span className="tabular-nums text-ink-soft">{c.phone}</span> : <span className="text-xs italic text-stone-500">No number on file</span>}
-                  </td>
-                  <td className="mt-1 block text-ink-soft md:mt-0 md:table-cell md:max-w-xs md:px-3 md:py-3.5">
-                    <span className="line-clamp-2">{[c.line1, c.city, c.postcode].filter(Boolean).join(", ")}</span>
-                  </td>
-                  <td className="mt-3 block md:mt-0 md:table-cell md:px-5 md:py-3.5">
-                    <div className="flex flex-wrap gap-2 md:justify-end">
-                      {c.phone && (
-                        <a href={telHref(c.phone)} className={btn("secondary", "sm")} title={`Call ${c.full_name}`}>
-                          <IconPhone className="size-4" /> Call
-                        </a>
-                      )}
-                      <ButtonLink href={`/admin/customers/manual/${c.id}`} variant="secondary" size="sm" title="Their invoices and delivery notes">
-                        <IconDocument className="size-4" /> Documents
-                      </ButtonLink>
-                      <ButtonLink href={`/admin/invoices/new?customer=${c.id}`} size="sm">
-                        <IconDocument className="size-4" /> New invoice
-                      </ButtonLink>
-                      <ButtonLink href={`/admin/delivery-notes/new?customer=${c.id}`} size="sm">
-                        <IconDeliveryNote className="size-4" /> New delivery note
-                      </ButtonLink>
-                      <Button variant="ghost" size="sm" onClick={() => edit(c)} aria-label={`Edit ${c.full_name}`}>
-                        <IconPencil className="size-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => remove(c)} aria-label={`Remove ${c.full_name}`}>
-                        <IconTrash className="size-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ListFrame>
+          <ListHead cols={["CID", "Customer", "Telephone", "Address", ""]} />
+          {customers.map((c) => (
+            <ListRow
+              key={c.id}
+              href={`/admin/customers/manual/${c.id}`}
+              refLabel={customerNo(c.number)}
+              title={c.full_name}
+              sub={[c.company, c.email].filter(Boolean).join(" · ")}
+              aside={c.phone ?? <span className="text-xs italic text-stone-500">No number</span>}
+              badge={<span className="text-sm text-ink-soft">{[c.line1, c.city, c.postcode].filter(Boolean).join(", ")}</span>}
+              action={
+                c.phone ? (
+                  <a href={telHref(c.phone)} className={btn("secondary", "sm")} title={`Call ${c.full_name}`}>
+                    <IconPhone className="size-4" /> Call
+                  </a>
+                ) : null
+              }
+              menu={
+                <Menu
+                  label={`More for ${c.full_name}`}
+                  title={c.full_name}
+                  items={[
+                    { label: "Invoices and delivery notes", icon: <IconDocument />, href: `/admin/customers/manual/${c.id}` },
+                    { label: "New invoice", icon: <IconDocument />, href: `/admin/invoices/new?customer=${c.id}` },
+                    { label: "New delivery note", icon: <IconDeliveryNote />, href: `/admin/delivery-notes/new?customer=${c.id}` },
+                    { label: "Edit details", icon: <IconPencil />, onSelect: () => edit(c) },
+                    { label: "Remove", icon: <IconTrash />, onSelect: () => remove(c), danger: true },
+                  ]}
+                />
+              }
+            />
+          ))}
+        </ListFrame>
       )}
 
       <CustomerModal open={open} customer={editing} onClose={() => setOpen(false)} />

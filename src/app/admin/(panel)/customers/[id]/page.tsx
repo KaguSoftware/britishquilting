@@ -5,6 +5,7 @@ import { formatPence } from "@/lib/utils";
 import { IconDownload, IconPrint } from "@/components/icons";
 import { Badge, ButtonLink, Card, PageHeader } from "@/components/admin/ui";
 import { CopyButton } from "@/components/ui/copy-button";
+import { customerNo } from "@/lib/invoices";
 import { ORDER_STATUS, addressLines, formatDate, type OrderStatus } from "@/components/admin/format";
 
 export const metadata = { title: "Customer" };
@@ -30,6 +31,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         title={p.full_name || p.email}
         description={
           <span className="flex flex-wrap items-center gap-2">
+            {p.cid && <span className="tabular-nums">{customerNo(p.cid)}</span>}
             {p.company_name && <span>{p.company_name}</span>}
             {(p.role === "staff" || p.role === "owner") && <Badge tone="aubergine">{p.role === "owner" ? "Owner" : "Staff"}</Badge>}
             <span>Customer since {formatDate(p.created_at)}</span>

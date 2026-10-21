@@ -327,6 +327,15 @@ export const IconUpload = (p: IconProps) => (
     <path d="M4 14.5v5.5h16v-5.5" />
   </Svg>
 );
+/** Three stitched knots: "more actions" */
+export const IconMore = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="5.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" />
+    <circle cx="18.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+    <Stitch d="M7.5 12h2.5M14 12h2.5" />
+  </Svg>
+);
 export const IconDownload = (p: IconProps) => (
   <Svg {...p}>
     <path d="M12 3.5V15" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" />

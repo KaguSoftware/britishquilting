@@ -3,6 +3,7 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createAdminClient, createClient, createPublicClient } from "@/lib/supabase/server";
 import type { ProductCardData } from "@/components/shop/product-card";
+import { resolveProductAddress } from "@/lib/product-address";
 
 /** How long the public catalog/content reads below may go stale before refetching. */
 const REVALIDATE_SECONDS = 300;
@@ -347,23 +348,8 @@ export async function isWishlisted(productId: string, userId: string) {
   return (count ?? 0) > 0;
 }
 
-/**
- * Where an address that isn't a live product should go: an old address from before codes (blackout-lining),
- * or a colour's own code (lin1ivo, which opens LIN1 on Ivory). Null when it is nothing we know.
- */
-export const findProductAddress = cache(async (raw: string): Promise<string | null> => {
-  const slug = decodeURIComponent(raw).toLowerCase();
-  const supabase = createPublicClient();
-  const [{ data: old }, { data: colour }] = await Promise.all([
-    supabase.from("product_slug_redirects").select("product_id").eq("old_slug", slug).maybeSingle(),
-    supabase.from("product_variants").select("id, product_id").eq("code", slug.toUpperCase()).eq("is_active", true).maybeSingle(),
-  ]);
-  const productId = old?.product_id ?? colour?.product_id;
-  if (!productId) return null;
-  const { data: product } = await supabase.from("products_public").select("slug").eq("id", productId).maybeSingle();
-  if (!product) return null;
-  return `/product/${product.slug}${colour && !old ? `?colour=${colour.id}` : ""}`;
-});
+/** Where an address that isn't a live product should go (see resolveProductAddress). */
+export const findProductAddress = cache((raw: string) => resolveProductAddress(raw));
 
 export type SearchHit = { key: string; href: string; name: string; colour: string | null; code: string | null; price_pence: number; sale_mode: "metre" | "roll" | "unit"; image: string | null };
 

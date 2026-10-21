@@ -129,8 +129,8 @@ export function ProductEditor({
           </Field>
           <div className="flex flex-col gap-1.5">
             <p className="text-sm font-medium text-ink">Web address</p>
-            <p className="text-[0.95rem] tabular-nums text-ink-soft">{isNew ? "Given when you save: the product's code, e.g. /product/lin3" : `/product/${form.slug}`}</p>
-            <p className="text-xs text-stone-500">Always the product code, so it changes if the product moves category. Old addresses keep working.</p>
+            <p className="text-[0.95rem] tabular-nums text-ink-soft">{isNew ? "Given when you save: the product code without the colour, e.g. /product/lin3" : `/product/${form.slug}`}</p>
+            <p className="text-xs text-stone-500">Always the product code without the colour letters, so it changes if the product moves category. Old addresses keep working.</p>
           </div>
         </Section>
 

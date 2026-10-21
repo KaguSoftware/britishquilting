@@ -47,16 +47,22 @@ export function CommandPalette({ open, onClose, isOwner }: { open: boolean; onCl
       return;
     }
     setLoading(true);
+    // A slower, older search must never overwrite the results for what is typed now.
+    let stale = false;
     const t = setTimeout(async () => {
       try {
-        setHits(await adminSearch(term));
+        const found = await adminSearch(term);
+        if (!stale) setHits(found);
       } catch {
-        setHits([]);
+        if (!stale) setHits([]);
       } finally {
-        setLoading(false);
+        if (!stale) setLoading(false);
       }
-    }, 220);
-    return () => clearTimeout(t);
+    }, 120);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
   }, [q, open]);
 
   const rows = useMemo<Row[]>(() => {

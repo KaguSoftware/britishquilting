@@ -15,8 +15,23 @@ import { getViewer } from "@/lib/data/catalog";
 import { findProductAddress, getCategories, getListProducts, getOwnReview, getProduct, getReviews, isWishlisted } from "@/lib/data/shop";
 import { formatMetres, siteUrl, storageUrl } from "@/lib/utils";
 
-export async function generateMetadata({ params }: PageProps<"/product/[slug]">): Promise<Metadata> {
+/**
+ * Old addresses (blackout-lining, lin5oys), colour codes (lin1ivo) and codes typed in capitals all end up on the
+ * product's own address, keeping anything else in the link (?colour=...).
+ */
+async function redirectToProductAddress(slug: string, query: Record<string, string | string[] | undefined>) {
+  const p = await getProduct(slug);
+  const target = p ? (slug === p.slug ? null : `/product/${p.slug}`) : await findProductAddress(slug);
+  if (!target) return;
+  const url = new URL(target, "http://x");
+  for (const [k, v] of Object.entries(query)) if (typeof v === "string" && !url.searchParams.has(k)) url.searchParams.set(k, v);
+  permanentRedirect(`${url.pathname}${url.search}`);
+}
+
+export async function generateMetadata({ params, searchParams }: PageProps<"/product/[slug]">): Promise<Metadata> {
   const { slug } = await params;
+  // Search engines get metadata before anything is sent, so redirecting here gives them a real 308.
+  await redirectToProductAddress(slug, await searchParams);
   const p = await getProduct(slug);
   if (!p) return { title: "Fabric not found" };
   const img = photosFor(p.product_images ?? [], p.variants[0]?.id ?? null)[0];
@@ -33,14 +48,9 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
   const { slug } = await params;
   const query = await searchParams;
   const { colour: wanted } = query;
+  // Visitors' browsers get here first, while metadata streams: same redirect.
+  await redirectToProductAddress(slug, query);
   const p = await getProduct(slug);
-  // Old addresses (blackout-lining), colour codes (lin1ivo) and codes typed in capitals all end up on the product's own address.
-  const target = p ? (slug === p.slug ? null : `/product/${p.slug}`) : await findProductAddress(slug);
-  if (target) {
-    const url = new URL(target, "http://x");
-    for (const [k, v] of Object.entries(query)) if (typeof v === "string" && !url.searchParams.has(k)) url.searchParams.set(k, v);
-    permanentRedirect(`${url.pathname}${url.search}`);
-  }
   if (!p) notFound();
 
   const [viewer, reviews, categories, all] = await Promise.all([getViewer().catch(() => null), getReviews(p.id), getCategories(), getListProducts()]);

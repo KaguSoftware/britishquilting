@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ManualCustomer, ProductPick } from "@/lib/invoices";
+import { parseCid, type ManualCustomer, type ProductPick } from "@/lib/invoices";
 import type { DeliveryNoteOption } from "@/lib/delivery-notes";
 
 export const CUSTOMER_COLS = "id, number, full_name, company, email, phone, line1, line2, city, county, postcode, note";
@@ -10,9 +10,9 @@ export const NOTE_OPTION_COLS = "id, number, customer_id, deliver_to, po_number,
 export async function findManualCustomers(db: SupabaseClient, q: string, limit = 20) {
   const term = q.trim().replace(/[%,()\\]/g, " ").trim();
   let query = db.from("manual_customers").select(CUSTOMER_COLS).order("full_name").limit(limit);
-  // "C1001" or "1001" finds that customer by number.
-  const n = term.replace(/^c-?/i, "");
-  if (term) query = query.or(`full_name.ilike.%${term}%,company.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%${/^\d{1,9}$/.test(n) ? `,number.eq.${n}` : ""}`);
+  // "CID-1001" or "1001" finds that customer by number.
+  const n = parseCid(term);
+  if (term) query = query.or(`full_name.ilike.%${term}%,company.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%${n != null ? `,number.eq.${n}` : ""}`);
   return ((await query).data ?? []) as ManualCustomer[];
 }
 

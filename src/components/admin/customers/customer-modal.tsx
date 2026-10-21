@@ -44,7 +44,7 @@ export function CustomerModal({
       description={
         customer
           ? "Only the name is needed. Add a phone number to call them from the list."
-          : "Only the name is needed. They get the next customer number, like C1001, when you add them."
+          : "Only the name is needed. They get the next customer ID, like CID-1001, when you add them."
       }
       wide
     >

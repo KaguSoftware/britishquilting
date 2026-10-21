@@ -5,10 +5,10 @@ import { useRef, useState } from "react";
 import { IconDownload, IconPrint, IconTrash } from "@/components/icons";
 import { DatePicker } from "@/components/ui/date-picker";
 import { customerDeliveryNotes, deleteInvoice, saveInvoice } from "@/lib/actions/admin/invoices";
-import { vatFromGross } from "@/lib/finance/calc";
+import { parsePounds, vatFromGross } from "@/lib/finance/calc";
 import { addressBlock, customerNo, invoiceTotal, lineAmount, manualInvoiceNo, type InvoiceLine, type ManualCustomer, type ManualInvoice, type ProductPick } from "@/lib/invoices";
 import { deliveryNoteNo, type DeliveryLine, type DeliveryNoteOption } from "@/lib/delivery-notes";
-import { formatPence } from "@/lib/utils";
+import { cn, formatPence } from "@/lib/utils";
 import { Button, ButtonLink, Card, Field, Textarea } from "../ui";
 import { SaveBar, SwitchRow, useAction, useConfirm, useUnsavedGuard } from "../controls";
 import { formatDate } from "../format";
@@ -19,7 +19,11 @@ import { productSuggest } from "@/components/admin/documents/product-suggest";
 import { INVOICE_ROWS, InvoiceRow, InvoiceSheet } from "./invoice-document";
 
 /** A product picked from the search, with how many. Its price is the product's; only the quantity is typed. */
-type ProductLine = { key: number; code: string; description: string; unit_price_pence: number; quantity: string };
+/**
+ * A product picked from the search, with how many and at what price. The price starts as the shop's and can be
+ * changed; `list_price_pence` remembers the shop's, so saving can ask about any that differ.
+ */
+type ProductLine = { key: number; code: string; description: string; list_price_pence: number; price: string; quantity: string };
 /** A line written by hand before products had to be picked: kept as it was, or removed. */
 type OldLine = { key: number; old: InvoiceLine };
 type Line = ProductLine | OldLine;
@@ -40,14 +44,23 @@ const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London"
 
 const isProduct = (l: Line): l is ProductLine => "code" in l;
 
-const fromPick = (key: number, p: ProductPick, quantity = "1"): ProductLine => ({ key, code: p.code, description: p.description, unit_price_pence: p.unit_price_pence, quantity });
+const pounds = (pence: number) => (pence / 100).toFixed(2);
+
+const fromPick = (key: number, p: ProductPick, quantity = "1"): ProductLine => ({
+  key,
+  code: p.code,
+  description: p.description,
+  list_price_pence: p.unit_price_pence,
+  price: pounds(p.unit_price_pence),
+  quantity,
+});
 
 function toForm(inv: ManualInvoice | null, customer: ManualCustomer | null, fromNote: DeliveryNoteOption | null, fromItems: DeliveryLine[]): Form {
   const customerId = customer?.id ?? null;
   // Invoicing a delivery note: its products come across with their quantities and prices.
   const copied = fromItems
     .filter((l) => l.code && l.qty != null && l.unit_price_pence != null)
-    .map((l, i): ProductLine => ({ key: i, code: l.code!, description: l.description, unit_price_pence: l.unit_price_pence!, quantity: String(l.qty) }));
+    .map((l, i): ProductLine => ({ key: i, code: l.code!, description: l.description, list_price_pence: l.unit_price_pence!, price: pounds(l.unit_price_pence!), quantity: String(l.qty) }));
   if (!inv)
     return {
       customer_id: fromNote?.customer_id ?? customerId,
@@ -64,7 +77,9 @@ function toForm(inv: ManualInvoice | null, customer: ManualCustomer | null, from
   return {
     customer_id: inv.customer_id,
     lines: inv.items.map((l, i): Line =>
-      l.code ? { key: i, code: l.code, description: l.description, unit_price_pence: l.unit_price_pence, quantity: String(l.quantity) } : { key: i, old: l },
+      l.code
+        ? { key: i, code: l.code, description: l.description, list_price_pence: l.list_price_pence ?? l.unit_price_pence, price: pounds(l.unit_price_pence), quantity: String(l.quantity) }
+        : { key: i, old: l },
     ),
     issued_on: inv.issued_on,
     due_on: inv.due_on,
@@ -120,8 +135,8 @@ export function InvoiceEditor({
   const orphan = invoice && !invoice.customer_id && !form.customer_id ? invoice.bill_to : null;
 
   // Quantity times the product's price, as you type.
-  const lineValues = form.lines.map((l) => (isProduct(l) ? { quantity: parseQty(l.quantity), unit_price_pence: l.unit_price_pence } : l.old));
-  const total = invoiceTotal(lineValues.map((v) => ({ quantity: v.quantity ?? 0, unit_price_pence: v.unit_price_pence })));
+  const lineValues = form.lines.map((l) => (isProduct(l) ? { quantity: parseQty(l.quantity), unit_price_pence: parsePounds(l.price) } : l.old));
+  const total = invoiceTotal(lineValues.map((v) => ({ quantity: v.quantity ?? 0, unit_price_pence: v.unit_price_pence ?? 0 })));
   const vat = vatFromGross(total, vatRate);
   const pages = Math.max(1, Math.ceil(form.lines.length / (INVOICE_ROWS - 1)));
 
@@ -155,6 +170,30 @@ export function InvoiceEditor({
     if (!form.lines.length) return setError("Add at least one product, using the search under the goods.");
     for (const [i, l] of form.lines.entries()) {
       if (isProduct(l) && parseQty(l.quantity) == null) return setError(`Line ${i + 1}: how many ${l.description}? Enter a number, like 2 or 1.5.`);
+      if (isProduct(l) && parsePounds(l.price) == null) return setError(`Line ${i + 1}: the price should be in pounds, like 6.95.`);
+    }
+    // A price that isn't the shop's: ask once. Prices already saved that way don't ask again.
+    const savedPrice = new Map(saved.lines.filter(isProduct).map((l) => [`${l.key}:${l.code}`, parsePounds(l.price)]));
+    const changed = form.lines.filter(isProduct).filter((l) => {
+      const p = parsePounds(l.price);
+      return p !== l.list_price_pence && savedPrice.get(`${l.key}:${l.code}`) !== p;
+    });
+    if (changed.length) {
+      const yes = await confirm({
+        title: changed.length === 1 ? "This price isn't the shop price" : "These prices aren't the shop price",
+        description: (
+          <span className="block space-y-1">
+            {changed.map((l) => (
+              <span key={l.key} className="block tabular-nums">
+                {l.code} {l.description}: {formatPence(l.list_price_pence)} &rarr; <strong>{formatPence(parsePounds(l.price)!)}</strong>
+              </span>
+            ))}
+            <span className="mt-2 block">Are you sure you want to {invoice ? "save" : "create"} the invoice with {changed.length === 1 ? "this price" : "these prices"}?</span>
+          </span>
+        ),
+        confirmLabel: invoice ? "Save anyway" : "Create anyway",
+      });
+      if (!yes) return;
     }
     if (!form.issued_on) return setError("Please choose the invoice date.");
     setError(null);
@@ -163,7 +202,9 @@ export function InvoiceEditor({
         id: invoice?.id,
         customer_id: form.customer_id!,
         items: form.lines.map((l) =>
-          isProduct(l) ? { code: l.code, description: l.description, quantity: parseQty(l.quantity)!, unit_price_pence: l.unit_price_pence } : { ...l.old, code: null },
+          isProduct(l)
+            ? { code: l.code, description: l.description, quantity: parseQty(l.quantity)!, unit_price_pence: parsePounds(l.price)!, list_price_pence: l.list_price_pence }
+            : { ...l.old, code: null },
         ),
         issued_on: form.issued_on!,
         due_on: form.due_on,
@@ -239,8 +280,19 @@ export function InvoiceEditor({
               empty={(term) => (term ? `No product matches \u201c${term}\u201d.` : "No products yet.")}
             />
           }
-          price={formatPence(l.unit_price_pence)}
-          amount={q != null ? formatPence(lineAmount({ quantity: q, unit_price_pence: l.unit_price_pence })) : ""}
+          price={
+            <PadInput
+              value={l.price}
+              onChange={(e) => setLine(l.key, { ...l, price: e.target.value })}
+              inputMode="decimal"
+              aria-label={`Line ${i + 1} price in pounds`}
+              aria-invalid={parsePounds(l.price) == null}
+              title={parsePounds(l.price) !== l.list_price_pence ? `Shop price ${formatPence(l.list_price_pence)}` : undefined}
+              // A price that isn't the shop's is underlined on screen, never in print.
+              className={cn("text-right tabular-nums", parsePounds(l.price) !== l.list_price_pence && "underline decoration-gold-600 decoration-dashed underline-offset-4")}
+            />
+          }
+          amount={q != null && parsePounds(l.price) != null ? formatPence(lineAmount({ quantity: q, unit_price_pence: parsePounds(l.price)! })) : ""}
           action={<RemoveLine onClick={() => removeLine(l.key)} label={`Remove line ${i + 1}`} />}
         />
       );

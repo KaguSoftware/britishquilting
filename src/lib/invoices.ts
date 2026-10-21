@@ -2,7 +2,7 @@
 
 export type ManualCustomer = {
   id: string;
-  /** Given by the database when the customer is added; shown as C1001. */
+  /** Given by the database when the customer is added; shown as CID-1001. */
   number: number;
   full_name: string;
   company: string | null;
@@ -22,12 +22,21 @@ export type InvoiceLine = {
   description: string;
   quantity: number;
   unit_price_pence: number;
+  /** The shop's price when the product was picked, when the invoice charged something else. */
+  list_price_pence?: number | null;
 };
 
 /** The customer as copied onto an invoice or delivery note. Older copies have no number. */
 export type BillTo = Omit<ManualCustomer, "id" | "note" | "number"> & { number?: number | null };
 
-export const customerNo = (n: number) => `C${n}`;
+/** Every customer's ID, whether added by hand, with an account or a guest: CID-1001. */
+export const customerNo = (n: number) => `CID-${n}`;
+
+/** "CID-1001", "cid1001", "C1001" or "1001" as the number 1001; null when it isn't a customer ID. */
+export function parseCid(q: string): number | null {
+  const m = q.trim().match(/^(?:cid|c)?[-\s]?(\d{1,9})$/i);
+  return m ? Number(m[1]) : null;
+}
 
 export type ManualInvoice = {
   id: string;

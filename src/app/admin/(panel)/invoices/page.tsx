@@ -4,7 +4,9 @@ import { IconChevronLeft, IconChevronRight, IconDocument, IconDownload, IconPhon
 import { staffDb } from "@/lib/actions/admin/guard";
 import { manualInvoiceNo, telHref, type BillTo } from "@/lib/invoices";
 import { cn, formatPence } from "@/lib/utils";
-import { Badge, ButtonLink, EmptyState, PageHeader, btn } from "@/components/admin/ui";
+import { Badge, ButtonLink, EmptyState, PageHeader } from "@/components/admin/ui";
+import { ListFrame, ListHead, ListRow } from "@/components/admin/list-row";
+import { Menu } from "@/components/ui/menu";
 import { formatDate, type Address } from "@/components/admin/format";
 import { OrderSearch } from "@/components/admin/orders/order-search";
 
@@ -13,6 +15,7 @@ export const metadata = { title: "Invoices" };
 const PAGE_SIZE = 50;
 
 const VIEWS = [
+  { key: "all", label: "All invoices" },
   { key: "manual", label: "Written by hand" },
   { key: "orders", label: "From shop orders" },
 ] as const;
@@ -52,7 +55,7 @@ function payment({ paidAt, due, closed }: { paidAt: string | null; due: string |
 
 export default async function InvoicesPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const view: View = VIEWS.some((v) => v.key === sp.view) ? (sp.view as View) : "manual";
+  const view: View = VIEWS.some((v) => v.key === sp.view) ? (sp.view as View) : "all";
   const tabKey = TABS.some((t) => t.key === sp.tab) ? sp.tab! : "all";
   const q = (sp.q ?? "").trim().replace(/[%,()]/g, "");
   const page = Math.max(1, Math.trunc(Number(sp.page)) || 1);
@@ -62,7 +65,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: SP 
   const href = (params: Record<string, string | undefined>) => {
     const u = new URLSearchParams();
     const merged = {
-      view: view === "manual" ? undefined : view,
+      view: view === "all" ? undefined : view,
       tab: tabKey === "all" ? undefined : tabKey,
       q: sp.q,
       ...params,
@@ -74,7 +77,44 @@ export default async function InvoicesPage({ searchParams }: { searchParams: SP 
   let rows: Row[] = [];
   let totalCount = 0;
 
-  if (view === "manual") {
+  if (view === "all") {
+    // Hand-written and shop order invoices in one list, newest first (the admin_invoices view).
+    let rowsQuery = db
+      .from("admin_invoices")
+      .select("kind, id, label, number, issued, name, company, email, phone, total_pence, paid_at, due_at, closed")
+      .order("issued", { ascending: false })
+      .order("number", { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
+    let countQuery = db.from("admin_invoices").select("id", { count: "exact", head: true });
+    if (tabKey === "unpaid") {
+      rowsQuery = rowsQuery.is("paid_at", null).is("closed", null);
+      countQuery = countQuery.is("paid_at", null).is("closed", null);
+    } else if (tabKey === "paid") {
+      rowsQuery = rowsQuery.not("paid_at", "is", null);
+      countQuery = countQuery.not("paid_at", "is", null);
+    }
+    if (q) {
+      const n = q.replace(/^(#|inv-?m?)/i, "");
+      const filter = /^\d+$/.test(n) ? `number.eq.${n}` : `name.ilike.%${q}%,company.ilike.%${q}%,email.ilike.%${q}%`;
+      rowsQuery = rowsQuery.or(filter);
+      countQuery = countQuery.or(filter);
+    }
+    const [{ data }, { count }] = await Promise.all([rowsQuery, countQuery]);
+    totalCount = count ?? 0;
+    rows = (data ?? []).map((i) => ({
+      id: `${i.kind}-${i.id}`,
+      label: i.label,
+      href: i.kind === "manual" ? `/admin/invoices/${i.id}` : `/admin/orders/${i.id}`,
+      pdf: i.kind === "manual" ? `/admin/invoices/${i.id}/print` : `/admin/orders/${i.id}/invoice`,
+      date: formatDate(i.issued),
+      name: i.name ?? i.email ?? "",
+      company: i.company,
+      email: i.email,
+      phone: i.phone,
+      total: i.total_pence,
+      payment: payment({ paidAt: i.paid_at, due: i.due_at, closed: i.closed }),
+    }));
+  } else if (view === "manual") {
     let rowsQuery = db
       .from("invoices")
       .select("id, number, bill_to, total_pence, issued_on, due_on, paid_at, customer:manual_customers(phone)")
@@ -170,7 +210,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: SP 
   }
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const searchHint = view === "manual" ? "Invoice number, name or company" : "Order number, email or name";
+  const searchHint = view === "manual" ? "Invoice number, name or company" : view === "orders" ? "Order number, email or name" : "Invoice number, name, company or email";
 
   return (
     <div>
@@ -189,12 +229,12 @@ export default async function InvoicesPage({ searchParams }: { searchParams: SP 
           <Link
             key={v.key}
             href={href({
-              view: v.key === "manual" ? undefined : v.key,
+              view: v.key === "all" ? undefined : v.key,
               tab: undefined,
               q: undefined,
               page: undefined,
             })}
-            className={cn("flex-1 rounded-[2px] px-3 py-1.5 text-center", v.key === view ? "bg-aubergine-800 text-cream-50" : "text-ink-soft")}
+            className={cn("flex-1 whitespace-nowrap rounded-[2px] px-3 py-1.5 text-center", v.key === view ? "bg-aubergine-800 text-cream-50" : "text-ink-soft")}
           >
             {v.label}
           </Link>
@@ -246,63 +286,39 @@ export default async function InvoicesPage({ searchParams }: { searchParams: SP 
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-[3px] border border-ink/12 bg-cream-50">
-          <table className="w-full text-sm">
-            <thead className="hidden border-b border-ink/15 text-left text-xs text-stone-500 md:table-header-group">
-              <tr>
-                <th className="px-5 py-3 font-medium">Invoice</th>
-                <th className="px-3 py-3 font-medium">Customer</th>
-                <th className="px-3 py-3 font-medium">Telephone</th>
-                <th className="px-3 py-3 font-medium">Payment</th>
-                <th className="px-3 py-3 text-right font-medium">Total</th>
-                <th className="px-5 py-3">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink/10">
-              {rows.map((r) => (
-                <tr key={r.id} className="block px-4 py-3 md:table-row md:p-0">
-                  <td className="block md:table-cell md:px-5 md:py-3.5">
-                    <Link href={r.href} className="font-display text-lg tabular-nums text-aubergine-900 hover:underline">
-                      {r.label}
-                    </Link>
-                    <span className="ml-2 text-xs text-stone-500 md:ml-0 md:block">{r.date}</span>
-                  </td>
-                  <td className="block md:table-cell md:px-3 md:py-3.5">
-                    <span className="font-medium">{r.name}</span>
-                    {r.company && <span className="block text-xs text-stone-500">{r.company}</span>}
-                    {r.email && (
-                      <a href={`mailto:${r.email}`} className="block text-xs text-stone-500 hover:text-aubergine-700">
-                        {r.email}
-                      </a>
-                    )}
-                  </td>
-                  <td className="mt-1 block md:mt-0 md:table-cell md:px-3 md:py-3.5">
-                    {r.phone ? <span className="tabular-nums text-ink-soft">{r.phone}</span> : <span className="text-xs italic text-stone-500">No number on file</span>}
-                  </td>
-                  <td className="mt-2 inline-block md:mt-0 md:table-cell md:px-3 md:py-3.5">{r.payment}</td>
-                  <td className="ml-3 mt-2 inline-block font-medium tabular-nums md:ml-0 md:mt-0 md:table-cell md:px-3 md:py-3.5 md:text-right">{formatPence(r.total)}</td>
-                  <td className="mt-3 block md:mt-0 md:table-cell md:px-5 md:py-3.5">
-                    <div className="flex gap-2 md:justify-end">
-                      {r.phone && (
-                        <a href={telHref(r.phone)} className={btn("secondary", "sm")} title={`Call ${r.name}`}>
-                          <IconPhone className="size-4" /> Call
-                        </a>
-                      )}
-                      <ButtonLink href={`${r.pdf}?do=print`} target="_blank" variant="secondary" size="sm">
-                        <IconPrint className="size-4" /> Print
-                      </ButtonLink>
-                      <ButtonLink href={`${r.pdf}?do=pdf`} target="_blank" size="sm">
-                        <IconDownload className="size-4" /> PDF
-                      </ButtonLink>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ListFrame>
+          <ListHead cols={["Invoice", "Customer", "Telephone", "Payment", "Total"]} />
+          {rows.map((r) => (
+            <ListRow
+              key={r.id}
+              href={r.href}
+              refLabel={r.label}
+              title={r.name}
+              sub={[r.date, r.company, r.email].filter(Boolean).join(" · ")}
+              aside={r.phone ?? <span className="text-xs italic text-stone-500">No number</span>}
+              badge={r.payment}
+              figure={<span className="font-medium">{formatPence(r.total)}</span>}
+              action={
+                <ButtonLink href={`${r.pdf}?do=pdf`} target="_blank" size="sm">
+                  <IconDownload className="size-4" /> PDF
+                </ButtonLink>
+              }
+              menu={
+                <Menu
+                  label={`More for ${r.label}`}
+                  title={`${r.label}, ${r.name}`}
+                  items={[
+                    { label: "Open", icon: <IconDocument />, href: r.href },
+                    { label: "Print", icon: <IconPrint />, href: `${r.pdf}?do=print`, target: "_blank" },
+                    { label: "Download PDF", icon: <IconDownload />, href: `${r.pdf}?do=pdf`, target: "_blank" },
+                    ...(r.phone ? [{ label: `Call ${r.phone}`, icon: <IconPhone />, href: telHref(r.phone) }] : []),
+                    ...(r.email ? [{ label: "Email", icon: <IconDocument />, href: `mailto:${r.email}` }] : []),
+                  ]}
+                />
+              }
+            />
+          ))}
+        </ListFrame>
       )}
 
       {rows.length > 0 && totalPages > 1 && (

@@ -111,6 +111,7 @@ const invoiceSchema = z
           description: z.string().trim().min(1, "Every line needs a description").max(300),
           quantity: z.number().positive("Quantities must be more than zero").max(100000),
           unit_price_pence: z.number().int().min(0).max(100_000_000),
+          list_price_pence: z.number().int().min(0).max(100_000_000).nullish(),
         }),
       )
       .min(1, "Add at least one product")
@@ -146,21 +147,22 @@ export async function saveInvoice(input: InvoiceInput): Promise<ActionResult<{ i
   if (id && !existing.data) return fail("That invoice has been deleted.");
   if (rest.delivery_note_id && note.data?.customer_id !== customer_id) return fail("That delivery note is for a different customer. Please choose another.");
 
-  // Every line is a product picked from the search, at its price. Lines this invoice was already saved with are
-  // kept as they were, so an old invoice still saves after a price change.
+  // Every line is a product picked from the search. Its price can be changed by hand (the editor asks first); the
+  // shop's price is kept beside it. Lines the invoice was already saved with are kept, even if the product has gone.
   const before = (existing.data?.items ?? []) as InvoiceLine[];
   const items: InvoiceLine[] = [];
   for (const [i, l] of rest.items.entries()) {
     const code = l.code?.toUpperCase() ?? null;
-    const kept = before.some((b) => (b.code ?? null) === code && b.unit_price_pence === l.unit_price_pence && (code || (b.description === l.description && b.quantity === l.quantity)));
+    const kept = before.some((b) => (b.code ?? null) === code && (code || (b.description === l.description && b.quantity === l.quantity && b.unit_price_pence === l.unit_price_pence)));
     if (!code) {
       if (!kept) return fail(`Line ${i + 1}: please pick a product from the search.`);
-    } else {
-      const now = price.get(code);
-      if (now == null && !kept) return fail(`Line ${i + 1}: ${code} isn't a product any more. Please pick it again from the search.`);
-      if (l.unit_price_pence !== now && !kept) return fail(`Line ${i + 1}: the price of ${code} has changed. Please pick it again from the search.`);
+      items.push({ code, description: l.description, quantity: l.quantity, unit_price_pence: l.unit_price_pence });
+      continue;
     }
-    items.push({ code, description: l.description, quantity: l.quantity, unit_price_pence: l.unit_price_pence });
+    const shop = price.get(code) ?? before.find((b) => b.code === code)?.list_price_pence ?? null;
+    if (shop == null && !kept) return fail(`Line ${i + 1}: ${code} isn't a product any more. Please pick it again from the search.`);
+    const list = l.list_price_pence ?? shop;
+    items.push({ code, description: l.description, quantity: l.quantity, unit_price_pence: l.unit_price_pence, ...(list != null && list !== l.unit_price_pence ? { list_price_pence: list } : {}) });
   }
 
   const total = invoiceTotal(items);

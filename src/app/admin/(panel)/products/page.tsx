@@ -4,7 +4,7 @@ import { staffDb } from "@/lib/actions/admin/guard";
 import { cn } from "@/lib/utils";
 import { ButtonLink, EmptyState, PageHeader } from "@/components/admin/ui";
 import { ProductTable, type ProductRow } from "@/components/admin/products/product-table";
-import { Dropdown } from "@/components/ui/dropdown";
+import { AutoSubmitDropdown } from "@/components/ui/auto-submit";
 
 export const metadata = { title: "Products" };
 
@@ -114,7 +114,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         </nav>
         <form className="flex flex-wrap gap-2" action="/admin/products">
           {filter !== "all" && <input type="hidden" name="filter" value={filter} />}
-          <Dropdown
+          <AutoSubmitDropdown
             name="category"
             size="sm"
             aria-label="Category"
