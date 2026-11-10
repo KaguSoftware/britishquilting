@@ -26,6 +26,7 @@
 
   --color-success: #3f6b4a;
   --color-danger: #9b2c2c;
+  --color-alert: #b45f1c;           /* staff stock alerts */
 
   --font-display: var(--font-caslon-display), "Libre Caslon Display", Georgia, serif;
   --font-serif: var(--font-caslon-text), "Libre Caslon Text", Georgia, serif;

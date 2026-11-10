@@ -7,6 +7,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { IconArrowRight as ArrowRight } from "@/components/icons";
 import { Crown } from "@/components/site/brand";
+import { BOLT_POSTER } from "./bolt-poster";
 import { FabricPlaceholder } from "@/components/shop/product-card";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -115,18 +116,19 @@ export function Hero({ categories }: { categories: HeroCategory[] }) {
           }}
         />
 
-        {/* poster: painted immediately, cross-fades to the live scene. Sits where the
-            3D bolt actually rests (below centre), not dead centre, so it never
-            overlaps the headline while it fades. */}
-        <div
-          aria-hidden
-          className="absolute inset-x-0 top-[66%] flex -translate-y-1/2 items-center justify-center transition-opacity duration-1000 ease-(--ease-silk)"
-          style={{ opacity: sceneReady ? 0 : 1 }}
-        >
-          <div className="h-[9vh] w-[62vw] max-w-[640px] rounded-full bg-[linear-gradient(180deg,#f6eedb,#d8c7a6_55%,#a8946f)] shadow-[0_40px_80px_-20px_rgba(0,0,0,.6)]" />
+        {/* poster: a captured frame of the real bolt, same size and position as the 3D one,
+            in the server HTML so it is there from first paint. The live canvas fades in over it, then the poster is dropped (no
+            double-transparent dip mid cross-fade). */}
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[calc(67.3%+4px)] flex -translate-y-1/2 justify-center transition-opacity delay-700 duration-75" style={{ opacity: sceneReady ? 0 : 1 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={BOLT_POSTER} alt="" width={1400} height={251} decoding="sync" className="block aspect-[1400/251] h-auto w-[min(91vh,96vw)]" />
         </div>
 
-        {mode === "webgl" && <HeroScene progress={progress} onReady={() => setTimeout(() => setSceneReady(true), 150)} />}
+        {mode === "webgl" && (
+          <div className="absolute inset-0 transition-opacity duration-700 ease-(--ease-silk)" style={{ opacity: sceneReady ? 1 : 0 }}>
+            <HeroScene progress={progress} onReady={() => setSceneReady(true)} />
+          </div>
+        )}
 
         {/* intro copy */}
         <div data-hero-intro className="pointer-events-none absolute inset-x-0 top-[12vh] flex flex-col items-center px-4 text-center">

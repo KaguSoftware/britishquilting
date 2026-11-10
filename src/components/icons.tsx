@@ -68,6 +68,14 @@ export const IconExternal = (p: IconProps) => (
 export const IconCheck = (p: IconProps) => (
   <Svg {...p}><path d="M4.5 12.5 9.5 17.5 19.5 6" /></Svg>
 );
+/** A bell with a stitched hem, for stock alerts */
+export const IconBell = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15L6 16.5Z" />
+    <path d="M10.2 20.5a2 2 0 0 0 3.6 0" />
+    <Stitch d="M9 14.5h6" />
+  </Svg>
+);
 export const IconClose = (p: IconProps) => (
   <Svg {...p}><path d="M6 6 18 18" /><path d="M18 6 6 18" /></Svg>
 );

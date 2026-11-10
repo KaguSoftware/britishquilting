@@ -23,7 +23,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const [{ data: products }, { data: categories }] = await Promise.all([
     db
       .from("products")
-      .select("id, name, slug, code, code_base, colour, colour_hex, sale_mode, price_pence, stock_qty, low_stock_threshold, track_stock, is_active, is_featured, category_id, product_images(storage_path, sort_order, variant_id), product_variants(id, name, colour_hex, stock_qty, is_active, sort_order)")
+      .select("id, name, slug, code, code_base, colour, colour_hex, sale_mode, price_pence, stock_qty, alert_below, low_stock_threshold, track_stock, is_active, is_featured, category_id, product_images(storage_path, sort_order, variant_id), product_variants(id, name, colour_hex, stock_qty, alert_below, is_active, sort_order)")
       .order("sort_order")
       .order("name"),
     db.from("categories").select("id, name").order("sort_order"),
@@ -36,7 +36,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     const imgs = [...(p.product_images ?? [])].sort((a, b) => Number(a.variant_id != null) - Number(b.variant_id != null) || a.sort_order - b.sort_order);
     const variants = [...((p.product_variants ?? []) as (ProductRow["variants"][number] & { sort_order: number })[])]
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((v) => ({ id: v.id, name: v.name, colour_hex: v.colour_hex, stock_qty: Number(v.stock_qty), is_active: v.is_active }));
+      .map((v) => ({ id: v.id, name: v.name, colour_hex: v.colour_hex, stock_qty: Number(v.stock_qty), alert_below: v.alert_below == null ? null : Number(v.alert_below), is_active: v.is_active }));
     return {
       id: p.id,
       name: p.name,
@@ -46,6 +46,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
       sale_mode: p.sale_mode,
       price_pence: p.price_pence,
       stock_qty: Number(p.stock_qty),
+      alert_below: p.alert_below == null ? null : Number(p.alert_below),
       low_stock_threshold: Number(p.low_stock_threshold),
       track_stock: p.track_stock,
       is_active: p.is_active,

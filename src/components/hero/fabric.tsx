@@ -194,6 +194,7 @@ function Strip({ strip, tex, progress }: { strip: number; tex: ReturnType<typeof
   const { mat, uniforms } = useFabricMaterial(strip, tex);
   const geo = useMemo(() => new THREE.PlaneGeometry(W / STRIPS, H, 40, 320), []);
   const smoothed = useRef(0);
+  const t0 = useRef<number | null>(null);
   const tmpColor = useMemo(() => new THREE.Color(), []);
   const tmpSheen = useMemo(() => new THREE.Color(), []);
 
@@ -203,11 +204,15 @@ function Strip({ strip, tex, progress }: { strip: number; tex: ReturnType<typeof
     smoothed.current += (target - smoothed.current) * (1 - Math.exp(-dt * 6));
     const p = smoothed.current;
     const t = state.clock.elapsedTime;
+    // idle motion starts from rest and eases in, so the handoff from the static poster doesn't jump
+    if (t0.current === null) t0.current = t;
+    const it = t - t0.current;
+    const idle = smooth(0, 2, it);
 
     const unroll = smooth(0.02, 0.42, p);
     uniforms.uLen.value = mix(0.02, H - 0.6, unroll);
     // idle "breathing" on the resting bolt before anyone scrolls
-    uniforms.uTop.value = mix(-0.55 + Math.sin(t * 0.8) * 0.02, 3.1, unroll);
+    uniforms.uTop.value = mix(-0.55 + Math.sin(it * 0.8) * 0.02 * idle, 3.1, unroll);
     uniforms.uWave.value = smooth(0.18, 0.55, p) * (1 - smooth(0.78, 0.95, p) * 0.7);
     uniforms.uTime.value = t;
     uniforms.uSplit.value = smooth(0.72, 0.94, p);
@@ -229,16 +234,30 @@ function Strip({ strip, tex, progress }: { strip: number; tex: ReturnType<typeof
   return <mesh geometry={geo} material={mat} frustumCulled={false} />;
 }
 
-export function Fabric({ progress }: { progress: RefObject<number> }) {
+export function Fabric({ progress, onReady }: { progress: RefObject<number>; onReady?: () => void }) {
   const tex = useMemo(() => makeWeaveTextures(), []);
   const group = useRef<THREE.Group>(null);
   const { camera, pointer, size } = useThree();
   // Fit the bolt to narrow (portrait) screens: visible width at z=0 from a 35° fov at distance 7
-  const aspect = size.width / size.height;
+  // r3f reports a 0x0 (then default 300x150) canvas until the first real measure, which made
+  // the cloth render tiny for a moment. Hold the scene back until the size is real.
+  const sized = size.width > 1 && size.height > 1;
+  const aspect = sized ? size.width / size.height : 1;
   const fit = Math.min(1, (2 * 7 * Math.tan((35 * Math.PI) / 360) * aspect * 0.86) / W);
   const cam = useRef(0);
+  const frames = useRef(0);
+  const start = useRef<number | null>(null);
+  const announced = useRef(false);
 
   useFrame((state, dt) => {
+    if (!sized) return;
+    // announce once a couple of frames have drawn at the final size
+    if (!announced.current && ++frames.current > 2) {
+      announced.current = true;
+      onReady?.();
+    }
+    if (start.current === null) start.current = state.clock.elapsedTime;
+    const it = state.clock.elapsedTime - start.current;
     const target = progress.current ?? 0;
     cam.current += (target - cam.current) * (1 - Math.exp(-dt * 4));
     const p = cam.current;
@@ -250,9 +269,11 @@ export function Fabric({ progress }: { progress: RefObject<number> }) {
     camera.lookAt(0, mix(0.2, 0.7, smooth(0.05, 0.4, p)) - dolly * 0.3, 0);
     if (group.current) {
       group.current.rotation.x = mix(-0.08, 0.12, smooth(0.0, 0.4, p)) - smooth(0.72, 0.94, p) * 0.1;
-      group.current.rotation.y = pointer.x * 0.05 + Math.sin(state.clock.elapsedTime * 0.3) * 0.02;
+      group.current.rotation.y = pointer.x * 0.05 + Math.sin(it * 0.3) * 0.02 * smooth(0, 2, it);
     }
   });
+
+  if (!sized) return null;
 
   return (
     <group ref={group} scale={fit}>

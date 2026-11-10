@@ -256,6 +256,35 @@ export async function updateVariantStock(variantId: string, qty: number): Promis
   return ok({ previous: before }, `${prev.name} stock updated${notified ? `. ${notified} waiting ${notified === 1 ? "customer" : "customers"} emailed` : ""}.`);
 }
 
+/** Set stock alerts. Colour products take one level per watched colour; a single-colour product takes one level. Empty or null turns alerts off. */
+export async function setStockAlert(productId: string, below: number | null, colours: { id: string; below: number }[] = []): Promise<ActionResult> {
+  const parsed = z
+    .object({
+      id: z.uuid(),
+      below: z.number().min(0).max(1_000_000).nullable(),
+      colours: z.array(z.object({ id: z.uuid(), below: z.number().min(0).max(1_000_000) })).max(500),
+    })
+    .safeParse({ id: productId, below, colours });
+  if (!parsed.success) return fail("Please enter an amount of 0 or more.");
+  const { db, viewer } = await staffDb();
+  const { data: prod } = await db.from("products").select("slug").eq("id", productId).maybeSingle();
+  if (!prod) return fail("This product no longer exists.");
+  const { data: all } = await db.from("product_variants").select("id").eq("product_id", productId);
+  if (all?.length) {
+    const levels = new Map(colours.map((c) => [c.id, c.below]));
+    for (const c of all) {
+      const { error } = await db.from("product_variants").update({ alert_below: levels.get(c.id) ?? null }).eq("id", c.id);
+      if (error) return fail("Couldn't save the alert.");
+    }
+  } else {
+    const { error } = await db.from("products").update({ alert_below: below }).eq("id", productId);
+    if (error) return fail("Couldn't save the alert.");
+  }
+  await audit(db, viewer.id, "product.stock_alert", "product", productId, { below, colours });
+  revalidatePath("/admin/products");
+  return ok(undefined, below == null && colours.length === 0 ? "Stock alert turned off." : "Stock alert saved.");
+}
+
 export async function deleteProduct(id: string): Promise<ActionResult> {
   if (!z.uuid().safeParse(id).success) return fail("Invalid product.");
   const { db, viewer } = await staffDb();

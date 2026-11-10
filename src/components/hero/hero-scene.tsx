@@ -26,7 +26,6 @@ export default function HeroScene({ progress, onReady }: { progress: RefObject<n
         dpr={[1, 1.5]}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
         camera={{ position: [0, 0.1, 7], fov: 35, near: 0.1, far: 50 }}
-        onCreated={() => onReady?.()}
       >
         <ambientLight intensity={0.25} />
         <directionalLight position={[3, 4, 5]} intensity={1.6} color="#fff4e0" />
@@ -38,7 +37,7 @@ export default function HeroScene({ progress, onReady }: { progress: RefObject<n
           <Lightformer form="rect" intensity={0.8} color="#74418b" position={[5, -1, 2]} rotation-y={-Math.PI / 2} scale={[4, 6, 1]} />
           <Lightformer form="ring" intensity={1.5} color="#ffffff" position={[2, 3, 6]} scale={1.5} />
         </Environment>
-        <Fabric progress={progress} />
+        <Fabric progress={progress} onReady={onReady} />
       </Canvas>
     </div>
   );
