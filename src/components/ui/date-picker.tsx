@@ -38,6 +38,8 @@ type Props = {
   formatValue?: (d: Date) => string;
   /** The calendar icon in the trigger. */
   icon?: boolean;
+  /** Buttons to jump by a year or ten, for dates far from today such as a date of birth. */
+  yearNav?: boolean;
   "aria-label"?: string;
 };
 
@@ -57,6 +59,7 @@ export function DatePicker({
   triggerClassName,
   formatValue,
   icon = true,
+  yearNav = false,
   ...aria
 }: Props) {
   const auto = useId();
@@ -175,6 +178,21 @@ export function DatePicker({
           <IconChevronRight className="size-4" />
         </button>
       </div>
+      {yearNav && (
+        <div className="mt-1 flex justify-center gap-1 border-b border-ink/10 pb-2 text-sm tabular-nums">
+          {[-10, -1, 1, 10].map((n) => (
+            <button
+              key={n}
+              type="button"
+              aria-label={`${n < 0 ? "Back" : "Forward"} ${Math.abs(n)} year${Math.abs(n) > 1 ? "s" : ""}`}
+              onClick={() => setView(new Date(view.getFullYear() + n, view.getMonth(), 1))}
+              className="min-h-9 rounded-sm px-3 text-ink-soft hover:bg-cream-200 hover:text-ink"
+            >
+              {n > 0 ? `+${n}` : n} {Math.abs(n) > 1 ? "yrs" : "yr"}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="mt-2 grid grid-cols-7 text-center font-serif text-sm italic text-ink-soft">
         {WEEKDAYS.map((w, i) => <span key={i} className="py-1.5">{w}</span>)}
       </div>

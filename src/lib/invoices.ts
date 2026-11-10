@@ -1,5 +1,14 @@
 /** Manual invoices: shared types and maths for the editor (client) and the actions (server). */
 
+export const GENDERS = [
+  { value: "female", label: "Female" },
+  { value: "male", label: "Male" },
+  { value: "other", label: "Other" },
+  { value: "unspecified", label: "Prefer not to say" },
+] as const;
+export type Gender = (typeof GENDERS)[number]["value"];
+export const genderLabel = (g: string | null | undefined) => GENDERS.find((x) => x.value === g)?.label ?? null;
+
 export type ManualCustomer = {
   id: string;
   /** Given by the database when the customer is added; shown as CID-1001. */
@@ -8,6 +17,10 @@ export type ManualCustomer = {
   company: string | null;
   email: string | null;
   phone: string | null;
+  alt_phone: string | null;
+  gender: Gender | null;
+  /** Date of birth, YYYY-MM-DD. */
+  dob: string | null;
   line1: string | null;
   line2: string | null;
   city: string | null;
@@ -27,7 +40,7 @@ export type InvoiceLine = {
 };
 
 /** The customer as copied onto an invoice or delivery note. Older copies have no number. */
-export type BillTo = Omit<ManualCustomer, "id" | "note" | "number"> & { number?: number | null };
+export type BillTo = Omit<ManualCustomer, "id" | "note" | "number" | "alt_phone" | "gender" | "dob"> & { number?: number | null };
 
 /** Every customer's ID, whether added by hand, with an account or a guest: CID-1001. */
 export const customerNo = (n: number) => `CID-${n}`;

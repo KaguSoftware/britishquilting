@@ -13,7 +13,7 @@ import { CustomerBook } from "@/components/admin/customers/customer-book";
 
 export const metadata = { title: "Customers" };
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 25;
 
 const VIEWS = [
   { key: "all", label: "All customers" },

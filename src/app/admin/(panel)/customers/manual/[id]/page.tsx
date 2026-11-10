@@ -5,7 +5,7 @@ import { IconDeliveryNote, IconDocument, IconDownload, IconPhone, IconPlus, Icon
 import { staffDb } from "@/lib/actions/admin/guard";
 import { CUSTOMER_COLS } from "@/lib/data/invoices";
 import { deliveryNoteNo, type DeliveryLine } from "@/lib/delivery-notes";
-import { billToLines, customerNo, manualInvoiceNo, telHref, type ManualCustomer } from "@/lib/invoices";
+import { billToLines, customerNo, genderLabel, manualInvoiceNo, telHref, type ManualCustomer } from "@/lib/invoices";
 import { formatPence } from "@/lib/utils";
 import { Badge, ButtonLink, Card, PageHeader, btn } from "@/components/admin/ui";
 import { formatDate } from "@/components/admin/format";
@@ -162,6 +162,27 @@ export default async function ManualCustomerPage({ params }: { params: Promise<{
               </a>
             ) : (
               <p className="text-sm italic text-stone-500">No number on file</p>
+            )}
+            {customer.alt_phone && (
+              <a href={telHref(customer.alt_phone)} className={btn("secondary", "sm") + " mt-2"}>
+                <IconPhone className="size-4" /> Call {customer.alt_phone} (alt)
+              </a>
+            )}
+            {(customer.gender || customer.dob) && (
+              <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                {customer.gender && (
+                  <>
+                    <dt className="text-stone-500">Gender</dt>
+                    <dd className="text-ink-soft">{genderLabel(customer.gender)}</dd>
+                  </>
+                )}
+                {customer.dob && (
+                  <>
+                    <dt className="text-stone-500">Date of birth</dt>
+                    <dd className="text-ink-soft">{formatDate(customer.dob)}</dd>
+                  </>
+                )}
+              </dl>
             )}
             {billToLines(customer).length > 1 && (
               <address className="mt-4 border-t border-ink/10 pt-4 text-sm not-italic leading-relaxed text-ink-soft">

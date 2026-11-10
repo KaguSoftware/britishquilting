@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseCid, type ManualCustomer, type ProductPick } from "@/lib/invoices";
 import type { DeliveryNoteOption } from "@/lib/delivery-notes";
 
-export const CUSTOMER_COLS = "id, number, full_name, company, email, phone, line1, line2, city, county, postcode, note";
+export const CUSTOMER_COLS = "id, number, full_name, company, email, phone, alt_phone, gender, dob, line1, line2, city, county, postcode, note";
 export const NOTE_OPTION_COLS = "id, number, customer_id, deliver_to, po_number, issued_on";
 
 /** Whatever matches, best first; used by the customer search on the invoice and delivery note pads. */

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { friendlyAuthError } from "@/lib/auth/helpers";
+import { contactTakenMessage } from "@/lib/customer-contact";
 
 export type FormState = {
   ok?: boolean;
@@ -49,7 +50,11 @@ export async function updateProfile(_: FormState, form: FormData): Promise<FormS
   if (!parsed.success) return { fieldErrors: z.flattenError(parsed.error).fieldErrors };
 
   const { error } = await supabase.from("profiles").update(parsed.data).eq("id", user.id);
-  if (error) return { message: "We couldn't save your details. Please try again." };
+  if (error) {
+    const taken = contactTakenMessage(error);
+    if (taken) return { fieldErrors: { phone: [taken] } };
+    return { message: "We couldn't save your details. Please try again." };
+  }
   await supabase.auth.updateUser({ data: { full_name: parsed.data.full_name } });
   revalidatePath("/account", "layout");
   return { ok: true, message: "Your details have been saved." };

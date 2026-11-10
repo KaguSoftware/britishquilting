@@ -6,6 +6,8 @@ import { vatFromGross } from "@/lib/finance/calc";
 import { customerNo, invoiceTotal, type BillTo, type InvoiceLine, type ManualCustomer, type ProductPick } from "@/lib/invoices";
 import { deliveryNotesFor, findManualCustomers, findProducts, productPrices } from "@/lib/data/invoices";
 import type { DeliveryNoteOption } from "@/lib/delivery-notes";
+import { contactTakenMessage } from "@/lib/customer-contact";
+import { phoneProblem } from "@/lib/phone";
 import { audit, staffDb } from "./guard";
 import { fail, ok, type ActionResult } from "./types";
 
@@ -28,7 +30,23 @@ const customerSchema = z.object({
     .nullish()
     .transform((v) => v || null)
     .refine((v) => v == null || z.email().safeParse(v).success, "That email address doesn't look right"),
-  phone: text(40).refine((v) => v == null || /^[+\d][\d\s()-]{5,}$/.test(v), "That phone number doesn't look right"),
+  phone: text(40).superRefine((v, ctx) => {
+    const msg = phoneProblem(v);
+    if (msg) ctx.addIssue({ code: "custom", message: msg });
+  }),
+  alt_phone: text(40).superRefine((v, ctx) => {
+    const msg = phoneProblem(v, "alternative phone number");
+    if (msg) ctx.addIssue({ code: "custom", message: msg });
+  }),
+  gender: z
+    .enum(["female", "male", "other", "unspecified"])
+    .nullish()
+    .transform((v) => v ?? null),
+  dob: z
+    .string()
+    .nullish()
+    .transform((v) => v || null)
+    .refine((v) => v == null || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v <= new Date().toISOString().slice(0, 10)), "That date of birth doesn't look right"),
   line1: text(200),
   line2: text(200),
   city: text(100),
@@ -68,10 +86,10 @@ export async function saveManualCustomer(input: ManualCustomerInput): Promise<Ac
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Please check the customer's details.");
   const { db, viewer } = await staffDb();
   const { id, ...row } = parsed.data;
-  const cols = "id, number, full_name, company, email, phone, line1, line2, city, county, postcode, note";
+  const cols = "id, number, full_name, company, email, phone, alt_phone, gender, dob, line1, line2, city, county, postcode, note";
   if (id) {
     const { data, error } = await db.from("manual_customers").update(row).eq("id", id).select(cols).single();
-    if (error || !data) return fail("Couldn't save the customer. Please try again.");
+    if (error || !data) return fail(contactTakenMessage(error, { showCid: true }) ?? "Couldn't save the customer. Please try again.");
     await audit(db, viewer.id, "manual_customer.update", "manual_customer", id);
     refresh();
     return ok(data as ManualCustomer, "Customer saved.");
@@ -81,7 +99,7 @@ export async function saveManualCustomer(input: ManualCustomerInput): Promise<Ac
     .insert({ ...row, created_by: viewer.id })
     .select(cols)
     .single();
-  if (error || !data) return fail("Couldn't add the customer. Please try again.");
+  if (error || !data) return fail(contactTakenMessage(error, { showCid: true }) ?? "Couldn't add the customer. Please try again.");
   await audit(db, viewer.id, "manual_customer.create", "manual_customer", data.id, { full_name: row.full_name });
   refresh();
   return ok(data as ManualCustomer, `Customer added as ${customerNo((data as ManualCustomer).number)}.`);

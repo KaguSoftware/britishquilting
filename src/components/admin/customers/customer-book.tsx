@@ -20,10 +20,20 @@ export function CustomerBook({ customers, searching, adding }: { customers: Manu
   const [editing, setEditing] = useState<ManualCustomer | null>(null);
   const [open, setOpen] = useState(adding);
 
-  // Opened from the "Add customer" button in the header: tidy the URL so a refresh doesn't reopen it.
+  // The "Add customer" button in the header links to ?add=1. Open the form each time that appears (this
+  // component stays mounted when you are already on this tab).
+  const [sawAdding, setSawAdding] = useState(adding);
+  if (adding !== sawAdding) {
+    setSawAdding(adding);
+    if (adding) {
+      setEditing(null);
+      setOpen(true);
+    }
+  }
+
+  // Then tidy the URL so a refresh doesn't reopen it.
   useEffect(() => {
-    if (!adding) return;
-    router.replace(`${pathname}?view=manual`, { scroll: false });
+    if (adding) router.replace(`${pathname}?view=manual`, { scroll: false });
   }, [adding, pathname, router]);
 
   const edit = (c: ManualCustomer | null) => {
