@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  isCurrentOrLater,
+  shiftPeriod,
   bucketKeys,
   bucketUnit,
   computeLedger,
@@ -186,5 +188,41 @@ describe("ledger", () => {
     const l = computeLedger([], [], []);
     expect(l.profit).toBe(0);
     expect(l.costMissing).toBe(0);
+  });
+});
+
+describe("stepping through periods with the arrows", () => {
+  const now = new Date("2026-11-21T10:00:00Z");
+
+  it("resolves the quarter that contains an anchor day", () => {
+    const q = resolvePeriod("quarter", now, undefined, "2026-05-01");
+    expect([q.fromDay, q.toDay, q.label]).toEqual(["2026-04-01", "2026-06-30", "Q2 2026"]);
+  });
+
+  it("steps back from Q1 into the previous year's Q4, and forward again", () => {
+    const q1 = resolvePeriod("quarter", now, undefined, "2026-01-01");
+    const back = shiftPeriod(q1, -1);
+    const q4 = resolvePeriod(back.key, now, undefined, back.anchor);
+    expect([q4.fromDay, q4.toDay, q4.label]).toEqual(["2025-10-01", "2025-12-31", "Q4 2025"]);
+    const fwd = shiftPeriod(q4, 1);
+    expect(resolvePeriod(fwd.key, now, undefined, fwd.anchor).fromDay).toBe("2026-01-01");
+  });
+
+  it("steps months, last month (as a month), years and tax years", () => {
+    const m = shiftPeriod(resolvePeriod("month", now), -1);
+    expect(m).toEqual({ key: "month", anchor: "2026-10-01" });
+    expect(shiftPeriod(resolvePeriod("last_month", now), -1)).toEqual({ key: "month", anchor: "2026-09-01" });
+    expect(shiftPeriod(resolvePeriod("year", now), -1)).toEqual({ key: "year", anchor: "2025-01-01" });
+    const ty = shiftPeriod(resolvePeriod("tax_year", now), -1);
+    expect(resolvePeriod(ty.key, now, undefined, ty.anchor).fromDay).toBe("2025-04-06");
+  });
+
+  it("knows when there is nothing later to step to", () => {
+    expect(isCurrentOrLater(resolvePeriod("quarter", now), now)).toBe(true);
+    expect(isCurrentOrLater(resolvePeriod("quarter", now, undefined, "2026-07-01"), now)).toBe(false);
+  });
+
+  it("ignores an anchor that isn't a real day", () => {
+    expect(resolvePeriod("quarter", now, undefined, "2026-02-31").fromDay).toBe("2026-10-01");
   });
 });

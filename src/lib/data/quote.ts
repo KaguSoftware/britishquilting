@@ -3,6 +3,28 @@ import "server-only";
 import { z } from "zod";
 import { quote, type CartLine } from "@/lib/pricing";
 import { findDiscount, getPricedProducts, getShippingRates, getStoreSettings, getVatRate, getViewer } from "@/lib/data/catalog";
+import { birthdayDiscount, birthdayEligibility, birthdayOfferLabel, londonDay } from "@/lib/birthday";
+import { createAdminClient } from "@/lib/supabase/server";
+
+/** Statuses that mean an order really used its birthday discount (abandoned and cancelled ones don't count). */
+const USED = ["paid", "processing", "shipped", "ready_for_collection", "collected", "delivered"];
+
+/** The birthday year a signed-in customer can use today, or null. */
+async function birthdayFor(userId: string, settings: Awaited<ReturnType<typeof getStoreSettings>>) {
+  if (!settings?.birthday_enabled) return null;
+  const db = createAdminClient();
+  const [{ data: p }, { data: used }] = await Promise.all([
+    db.from("profiles").select("dob, dob_changed_at").eq("id", userId).maybeSingle(),
+    db.from("orders").select("birthday_year").eq("user_id", userId).not("birthday_year", "is", null).in("status", USED),
+  ]);
+  return birthdayEligibility({
+    settings,
+    dob: p?.dob ?? null,
+    dobChangedAt: p?.dob_changed_at ?? null,
+    today: londonDay(),
+    usedYears: (used ?? []).map((o) => o.birthday_year as number),
+  });
+}
 
 const lineSchema = z.object({
   productId: z.uuid(),
@@ -32,15 +54,33 @@ export async function computeQuote(raw: QuoteInput) {
     findDiscount(input.discountCode, input.email ?? viewer?.email),
     getVatRate(),
   ]);
-  const q = quote({
-    lines: input.lines as CartLine[],
-    products,
-    rates,
-    rateId: input.rateId,
-    fulfilment: input.fulfilment,
-    discount: disc.discount,
-    freeThreshold: settings.free_shipping_threshold_pence,
-    vatRatePct,
-  });
-  return { q, viewer, settings, discount: disc.discount, discountError: disc.error, input };
+  const priced = (discount: typeof disc.discount) =>
+    quote({
+      lines: input.lines as CartLine[],
+      products,
+      rates,
+      rateId: input.rateId,
+      fulfilment: input.fulfilment,
+      discount,
+      freeThreshold: settings.free_shipping_threshold_pence,
+      vatRatePct,
+    });
+  let q = priced(disc.discount);
+  let discount = disc.discount;
+
+  // Birthday treat: taken off automatically for signed-in customers in their birthday window. It doesn't stack
+  // with a code; whichever leaves the lower total wins.
+  let birthday: { applied: boolean; year: number; end: string; label: string; beatCode: boolean } | null = null;
+  const eligible = viewer ? await birthdayFor(viewer.id, settings) : null;
+  if (eligible) {
+    const bday = birthdayDiscount(settings);
+    const qb = priced(bday);
+    const applied = qb.discount > 0 && qb.total < q.total;
+    if (applied) {
+      q = qb;
+      discount = bday;
+    }
+    birthday = { applied, year: eligible.year, end: eligible.end, label: birthdayOfferLabel(settings), beatCode: applied && !!disc.discount };
+  }
+  return { q, viewer, settings, discount, codeDiscount: disc.discount, discountError: disc.error, birthday, input };
 }

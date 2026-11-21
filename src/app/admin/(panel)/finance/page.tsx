@@ -13,7 +13,8 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : null);
   const key = (KEYS.includes(one("p") as PeriodKey) ? one("p") : "month") as PeriodKey;
-  const period = resolvePeriod(key, new Date(), { from: one("from"), to: one("to") });
+  const at = one("at");
+  const period = resolvePeriod(key, new Date(), { from: one("from"), to: one("to") }, at);
   const prev = previousPeriod(period);
   const data = await loadFinance(db, period, prev);
 
@@ -24,7 +25,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
         title="Money"
         description="What came in, what went out and what is left. Figures are before tax on profits."
       />
-      <FinanceDashboard initial={{ data, period, prev }} initialKey={key} />
+      <FinanceDashboard initial={{ data, period, prev }} initialKey={key} initialAt={key === "custom" ? null : at} />
     </div>
   );
 }

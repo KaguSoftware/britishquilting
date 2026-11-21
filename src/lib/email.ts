@@ -16,6 +16,7 @@ import DeliveredEmail from "@/emails/delivered";
 import { BackInStockEmail, LowStockEmail } from "@/emails/stock";
 import { DisputeAlertEmail } from "@/emails/dispute-alert";
 import WelcomeNewsletterEmail from "@/emails/welcome-newsletter";
+import BirthdayEmail, { type BirthdayEmailProps } from "@/emails/birthday";
 import type { EmailAddress, EmailLine } from "@/emails/components";
 
 /**
@@ -465,4 +466,8 @@ export async function sendDisputeAlert(orderId: string, dispute: { id: string; a
 
 export async function sendWelcomeNewsletter(email: string) {
   return sendEmail({ to: email, subject: "Welcome to British Quilting", react: WelcomeNewsletterEmail() });
+}
+
+export async function sendBirthdayEmail(email: string, props: BirthdayEmailProps) {
+  return sendEmail({ to: email, subject: `Happy birthday${props.firstName ? `, ${props.firstName}` : ""}: a treat from British Quilting`, react: BirthdayEmail(props) });
 }

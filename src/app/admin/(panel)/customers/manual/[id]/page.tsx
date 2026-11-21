@@ -5,7 +5,10 @@ import { IconDeliveryNote, IconDocument, IconDownload, IconPhone, IconPlus, Icon
 import { staffDb } from "@/lib/actions/admin/guard";
 import { CUSTOMER_COLS } from "@/lib/data/invoices";
 import { deliveryNoteNo, type DeliveryLine } from "@/lib/delivery-notes";
-import { billToLines, customerNo, genderLabel, manualInvoiceNo, telHref, type ManualCustomer } from "@/lib/invoices";
+import { altAddressLines, billToLines, customerNo, genderLabel, manualInvoiceNo, telHref, type ManualCustomer } from "@/lib/invoices";
+import { saveManualCustomerNote } from "@/lib/actions/admin/invoices";
+import { NoteEditor } from "@/components/admin/customers/note-editor";
+import { EditCustomerButton } from "@/components/admin/customers/edit-customer-button";
 import { formatPence } from "@/lib/utils";
 import { Badge, ButtonLink, Card, PageHeader, btn } from "@/components/admin/ui";
 import { formatDate } from "@/components/admin/format";
@@ -66,9 +69,27 @@ export default async function ManualCustomerPage({ params }: { params: Promise<{
       <PageHeader
         back={{ href: "/admin/customers?view=manual", label: "Customers added by hand" }}
         title={customer.full_name}
-        description={`Customer ${customerNo(customer.number)}${customer.company ? ` · ${customer.company}` : ", added by hand without a website account."}`}
+        description={
+          <>
+            Customer {customerNo(customer.number)}
+            {customer.company_id ? (
+              <>
+                {" · "}
+                <Link href={`/admin/customers/companies/${customer.company_id}`} className="text-aubergine-700 underline-offset-2 hover:underline">
+                  {customer.company}
+                </Link>
+              </>
+            ) : customer.company ? (
+              ` · ${customer.company}`
+            ) : (
+              ", added by hand without a website account."
+            )}
+            {customer.is_student && " · Student"}
+          </>
+        }
         actions={
           <>
+            <EditCustomerButton customer={customer} />
             <ButtonLink href={`/admin/delivery-notes/new?customer=${customer.id}`} variant="secondary">
               <IconPlus className="size-4" /> Delivery note
             </ButtonLink>
@@ -168,8 +189,9 @@ export default async function ManualCustomerPage({ params }: { params: Promise<{
                 <IconPhone className="size-4" /> Call {customer.alt_phone} (alt)
               </a>
             )}
-            {(customer.gender || customer.dob) && (
-              <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                <dt className="text-stone-500">Student</dt>
+                <dd className="text-ink-soft">{customer.is_student ? "Yes" : "No"}</dd>
                 {customer.gender && (
                   <>
                     <dt className="text-stone-500">Gender</dt>
@@ -182,20 +204,34 @@ export default async function ManualCustomerPage({ params }: { params: Promise<{
                     <dd className="text-ink-soft">{formatDate(customer.dob)}</dd>
                   </>
                 )}
-              </dl>
-            )}
+            </dl>
             {billToLines(customer).length > 1 && (
-              <address className="mt-4 border-t border-ink/10 pt-4 text-sm not-italic leading-relaxed text-ink-soft">
-                {billToLines(customer)
-                  .slice(1)
-                  .map((l, i) => (
+              <div className="mt-4 border-t border-ink/10 pt-4">
+                <p className="text-sm font-medium text-ink">Address</p>
+                <address className="mt-1 text-sm not-italic leading-relaxed text-ink-soft">
+                  {billToLines(customer)
+                    .slice(1)
+                    .map((l, i) => (
+                      <span key={i} className="block">
+                        {l}
+                      </span>
+                    ))}
+                </address>
+              </div>
+            )}
+            {altAddressLines(customer).length > 0 && (
+              <div className="mt-4 border-t border-ink/10 pt-4">
+                <p className="text-sm font-medium text-ink">Second address</p>
+                <address className="mt-1 text-sm not-italic leading-relaxed text-ink-soft">
+                  {altAddressLines(customer).map((l, i) => (
                     <span key={i} className="block">
                       {l}
                     </span>
                   ))}
-              </address>
+                </address>
+              </div>
             )}
-            {customer.note && <p className="mt-4 whitespace-pre-line border-t border-ink/10 pt-4 text-sm text-ink-soft">{customer.note}</p>}
+            <NoteEditor note={customer.note} onSave={saveManualCustomerNote.bind(null, customer.id)} className="mt-4 border-t border-ink/10 pt-4" />
           </Card>
         </div>
       </div>

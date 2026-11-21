@@ -6,6 +6,9 @@ import { IconDownload, IconPrint } from "@/components/icons";
 import { Badge, ButtonLink, Card, PageHeader } from "@/components/admin/ui";
 import { CopyButton } from "@/components/ui/copy-button";
 import { customerNo } from "@/lib/invoices";
+import { saveAccountNote } from "@/lib/actions/admin/customers";
+import { NoteEditor } from "@/components/admin/customers/note-editor";
+import { LinkCompany } from "@/components/admin/companies/link-company";
 import { ORDER_STATUS, addressLines, formatDate, type OrderStatus } from "@/components/admin/format";
 
 export const metadata = { title: "Customer" };
@@ -14,15 +17,17 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { db } = await staffDb();
-  const [{ data: p }, { data: orders }, { data: addresses }, { data: reviews }] = await Promise.all([
-    db.from("profiles").select("*").eq("id", id).maybeSingle(),
+  const [{ data: p }, { data: orders }, { data: addresses }, { data: reviews }, { data: staffNote }] = await Promise.all([
+    db.from("profiles").select("*, company:companies(id, name)").eq("id", id).maybeSingle(),
     db.from("orders").select("id, number, status, total_pence, created_at").eq("user_id", id).order("created_at", { ascending: false }),
     db.from("addresses").select("*").eq("user_id", id).order("is_default", { ascending: false }),
     db.from("reviews").select("id, rating, title, status, created_at").eq("user_id", id).order("created_at", { ascending: false }),
+    db.from("account_notes").select("note").eq("profile_id", id).maybeSingle(),
   ]);
   if (!p) notFound();
   const counted = (orders ?? []).filter((o) => !["pending", "cancelled", "refunded"].includes(o.status));
   const spent = counted.reduce((s, o) => s + o.total_pence, 0);
+  const company = (Array.isArray(p.company) ? p.company[0] : p.company) as { id: string; name: string } | null;
 
   return (
     <div>
@@ -32,7 +37,14 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         description={
           <span className="flex flex-wrap items-center gap-2">
             {p.cid && <span className="tabular-nums">{customerNo(p.cid)}</span>}
-            {p.company_name && <span>{p.company_name}</span>}
+            {company ? (
+              <Link href={`/admin/customers/companies/${company.id}`} className="text-aubergine-700 underline-offset-2 hover:underline">
+                {company.name}
+              </Link>
+            ) : (
+              p.company_name && <span>{p.company_name}</span>
+            )}
+            {p.is_student && <span>Student</span>}
             {(p.role === "staff" || p.role === "owner") && <Badge tone="aubergine">{p.role === "owner" ? "Owner" : "Staff"}</Badge>}
             <span>Customer since {formatDate(p.created_at)}</span>
           </span>
@@ -103,6 +115,16 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
             )}
             {p.vat_number && <p className="mt-2 text-sm text-ink-soft">VAT: {p.vat_number}</p>}
             <p className="mt-2 text-sm text-ink-soft">{p.marketing_opt_in ? "Happy to receive emails" : "Doesn't want marketing emails"}</p>
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+              <dt className="text-stone-500">Student</dt>
+              <dd className="text-ink-soft">{p.is_student == null ? "Not answered" : p.is_student ? "Yes" : "No"}</dd>
+              <dt className="text-stone-500">Birthday</dt>
+              <dd className="text-ink-soft">{p.dob ? formatDate(p.dob) : "Not given"}</dd>
+            </dl>
+            <div className="mt-4 border-t border-ink/10 pt-4">
+              <LinkCompany kind="account" id={p.id} company={company} />
+            </div>
+            <NoteEditor note={staffNote?.note ?? null} onSave={saveAccountNote.bind(null, p.id)} className="mt-4 border-t border-ink/10 pt-4" />
           </Card>
 
           {(addresses ?? []).length > 0 && (

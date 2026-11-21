@@ -27,7 +27,8 @@ export default async function ManualInvoicePrintPage({ params, searchParams }: {
   const [{ id }, sp] = await Promise.all([params, searchParams]);
   if (!isId(id)) notFound();
   const { db } = await staffDb();
-  const { data } = await db.from("invoices").select("*, delivery_note:delivery_notes(number)").eq("id", id).maybeSingle();
+  // The delivery note written from this invoice (delivery_notes.invoice_id).
+  const { data } = await db.from("invoices").select("*, delivery_note:delivery_notes!delivery_notes_invoice_id_fkey(number)").eq("id", id).maybeSingle();
   if (!data) notFound();
   const inv = data as ManualInvoice & { delivery_note: { number: number } | { number: number }[] | null };
   const dn = Array.isArray(inv.delivery_note) ? inv.delivery_note[0] : inv.delivery_note;

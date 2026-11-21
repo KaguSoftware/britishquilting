@@ -6,7 +6,7 @@ import { computeQuote, type QuoteInput } from "@/lib/data/quote";
 /** Client-safe shape: no stock levels leak beyond what the viewer is entitled to. */
 export async function quoteCart(raw: QuoteInput) {
   try {
-    const { q, settings, discount, discountError } = await computeQuote(raw);
+    const { q, settings, discount, codeDiscount, discountError, birthday } = await computeQuote(raw);
     return {
       ok: true as const,
       lines: q.lines.map((l) => ({
@@ -20,8 +20,10 @@ export async function quoteCart(raw: QuoteInput) {
       })),
       subtotal: q.subtotal,
       discount: q.discount,
-      discountCode: discount?.code ?? null,
+      // The code the customer typed (still valid), even when the birthday treat beat it.
+      discountCode: codeDiscount?.code ?? null,
       discountError: discountError ?? null,
+      birthday: birthday ? { applied: birthday.applied, label: birthday.label, end: birthday.end, beatCode: birthday.beatCode } : null,
       shipping: q.shipping,
       total: q.total,
       vat: q.vat,

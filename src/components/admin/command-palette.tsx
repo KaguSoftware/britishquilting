@@ -13,7 +13,9 @@ type Row = { key: string; title: string; subtitle?: string; href: string; icon: 
 const QUICK: Row[] = [
   { key: "new-product", title: "Add a new product", href: "/admin/products/new", icon: IconPlus, group: "Quick actions" },
   { key: "to-pack", title: "Orders to pack", href: "/admin/orders?tab=to_pack&view=board", icon: IconParcel, group: "Quick actions" },
-  { key: "new-discount", title: "Create a discount code", href: "/admin/discounts?new=1", icon: IconPlus, group: "Quick actions" },
+  { key: "new-discount", title: "Create a discount code", href: "/admin/discounts/codes?new=1", icon: IconPlus, group: "Quick actions" },
+  { key: "offers", title: "Special offers", subtitle: "Discounts", href: "/admin/discounts/offers", icon: IconArrowRight, group: "Quick actions" },
+  { key: "birthdays", title: "Birthday treats", subtitle: "Discounts", href: "/admin/discounts/birthdays", icon: IconArrowRight, group: "Quick actions" },
   { key: "new-invoice", title: "Write an invoice", href: "/admin/invoices/new", icon: IconPlus, group: "Quick actions" },
   { key: "new-delivery-note", title: "Write a delivery note", href: "/admin/delivery-notes/new", icon: IconPlus, group: "Quick actions" },
   { key: "new-post", title: "Write a journal post", href: "/admin/journal/new", icon: IconPlus, group: "Quick actions" },

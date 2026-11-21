@@ -199,7 +199,7 @@ export function ProductEditor({
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Was price (optional)" htmlFor="compare" hint="Shows the old price crossed out, for a sale.">
+            <Field label="Was price (optional)" htmlFor="compare" hint="Shows the old price crossed out, for a sale. Also listed under Discounts, Special offers.">
               <MoneyInput id="compare" value={form.compare_at} onChange={(e) => set("compare_at", e.target.value)} placeholder="0.00" />
             </Field>
             <Field label={`Weight ${mode.unit}`} htmlFor="wt" hint="Used to work out postage.">

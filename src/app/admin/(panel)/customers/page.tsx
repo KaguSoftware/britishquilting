@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { IconChevronLeft, IconChevronRight, IconDeliveryNote, IconDocument, IconParcel, IconPhone, IconPlus, IconUser, IconUsers } from "@/components/icons";
+import { IconChevronLeft, IconChevronRight, IconDeliveryNote, IconDocument, IconParcel, IconPencil, IconPhone, IconPlus, IconUser, IconUsers } from "@/components/icons";
 import { staffDb } from "@/lib/actions/admin/guard";
 import { CUSTOMER_COLS } from "@/lib/data/invoices";
 import { customerNo, parseCid, telHref, type ManualCustomer } from "@/lib/invoices";
@@ -10,18 +9,14 @@ import { ListFrame, ListHead, ListRow } from "@/components/admin/list-row";
 import { AutoSubmitDropdown } from "@/components/ui/auto-submit";
 import { Menu, type MenuItem } from "@/components/ui/menu";
 import { CustomerBook } from "@/components/admin/customers/customer-book";
+import { CUSTOMER_VIEWS, CustomerTabs, type CustomerView } from "@/components/admin/customers/customer-tabs";
 
 export const metadata = { title: "Customers" };
 
 const PAGE_SIZE = 25;
 
-const VIEWS = [
-  { key: "all", label: "All customers" },
-  { key: "accounts", label: "With an account" },
-  { key: "guests", label: "Without an account" },
-  { key: "manual", label: "Added by hand" },
-] as const;
-type View = (typeof VIEWS)[number]["key"];
+const VIEWS = CUSTOMER_VIEWS.filter((v) => v.key !== "companies");
+type View = Exclude<CustomerView, "companies">;
 
 type SP = Promise<{ q?: string; sort?: string; view?: string; add?: string; page?: string }>;
 
@@ -68,17 +63,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: SP
           </ButtonLink>
         }
       />
-      <div className="mb-5 flex overflow-x-auto rounded-[3px] border border-ink/15 bg-cream-50 p-0.5 text-sm sm:inline-flex">
-        {VIEWS.map((v) => (
-          <Link
-            key={v.key}
-            href={v.key === "all" ? "/admin/customers" : `/admin/customers?view=${v.key}`}
-            className={cn("flex-1 shrink-0 whitespace-nowrap rounded-[2px] px-3 py-1.5 text-center", v.key === view ? "bg-aubergine-800 text-cream-50" : "text-ink-soft")}
-          >
-            {v.label}
-          </Link>
-        ))}
-      </div>
+      <CustomerTabs active={view} />
     </>
   );
 
@@ -155,12 +140,14 @@ export default async function CustomersPage({ searchParams }: { searchParams: SP
                 r.kind === "manual"
                   ? [
                       { label: "Invoices and delivery notes", icon: <IconDocument />, href: open },
+                      { label: "Edit details or note", icon: <IconPencil />, href: open },
                       { label: "New invoice", icon: <IconDocument />, href: `/admin/invoices/new?customer=${r.ref_id}` },
                       { label: "New delivery note", icon: <IconDeliveryNote />, href: `/admin/delivery-notes/new?customer=${r.ref_id}` },
                     ]
                   : r.kind === "account"
                     ? [
                         { label: "Customer details", icon: <IconUser />, href: open },
+                        { label: "Company or note", icon: <IconPencil />, href: open },
                         { label: "Their orders", icon: <IconParcel />, href: `/admin/orders?tab=all&q=${encodeURIComponent(r.email ?? "")}` },
                       ]
                     : [{ label: "Their orders", icon: <IconParcel />, href: open }];

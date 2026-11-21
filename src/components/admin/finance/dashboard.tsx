@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getFinancePeriod } from "@/lib/actions/admin/finance";
 import type { FinanceData } from "@/lib/data/finance";
-import type { Period, PeriodKey } from "@/lib/finance/calc";
+import { isCurrentOrLater, shiftPeriod, STEPPABLE, type Period, type PeriodKey } from "@/lib/finance/calc";
 import { formatPence, cn } from "@/lib/utils";
 import { IconDocument } from "@/components/icons";
 import { btn, Card } from "@/components/admin/ui";
@@ -23,19 +23,23 @@ const QUICK_KEYS: Exclude<PeriodKey, "custom">[] = ["month", "last_month", "quar
  * range) are prefetched shortly after mount and cached in memory, so switching between them
  * is instant, no server round-trip, instead of a full page navigation each time.
  */
-export function FinanceDashboard({ initial, initialKey }: { initial: State; initialKey: PeriodKey }) {
+type QuickKey = Exclude<PeriodKey, "custom">;
+/** Cache key: the kind of period plus the day it was stepped to ("" for the current one). */
+const slot = (key: PeriodKey, at?: string | null) => `${key}:${at ?? ""}`;
+
+export function FinanceDashboard({ initial, initialKey, initialAt }: { initial: State; initialKey: PeriodKey; initialAt?: string | null }) {
   const [state, setState] = useState<State>(initial);
-  const cache = useRef(new Map<PeriodKey, State>([[initialKey, initial]]));
+  const cache = useRef(new Map<string, State>([[slot(initialKey, initialAt), initial]]));
   const [loadingKey, setLoadingKey] = useState<PeriodKey | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       for (const key of QUICK_KEYS) {
-        if (cancelled || cache.current.has(key)) continue;
+        if (cancelled || cache.current.has(slot(key))) continue;
         try {
           const result = await getFinancePeriod(key);
-          if (!cancelled) cache.current.set(key, result);
+          if (!cancelled) cache.current.set(slot(key), result);
         } catch {
           // A quiet miss just means that tab falls back to a normal fetch on click.
         }
@@ -46,21 +50,41 @@ export function FinanceDashboard({ initial, initialKey }: { initial: State; init
     };
   }, []);
 
-  const selectQuick = (key: Exclude<PeriodKey, "custom">) => {
-    window.history.replaceState(null, "", `/admin/finance?p=${key}`);
-    const cached = cache.current.get(key);
+  const show = (key: QuickKey, at?: string | null) => {
+    window.history.replaceState(null, "", `/admin/finance?p=${key}${at ? `&at=${at}` : ""}`);
+    const cached = cache.current.get(slot(key, at));
     if (cached) {
       setState(cached);
+      prefetchBefore(cached.period);
       return;
     }
     setLoadingKey(key);
-    getFinancePeriod(key)
+    getFinancePeriod(key, at)
       .then((result) => {
-        cache.current.set(key, result);
+        cache.current.set(slot(key, at), result);
         setState(result);
+        prefetchBefore(result.period);
       })
       .finally(() => setLoadingKey(null));
   };
+
+  // Fetch the period before quietly, so stepping back with the arrow is instant too.
+  const prefetchBefore = (p: Period) => {
+    if (!STEPPABLE.includes(p.key)) return;
+    const back = shiftPeriod(p, -1);
+    const k = slot(back.key, back.anchor);
+    if (cache.current.has(k)) return;
+    getFinancePeriod(back.key as QuickKey, back.anchor)
+      .then((r) => cache.current.set(k, r))
+      .catch(() => {});
+  };
+
+  const selectQuick = (key: QuickKey) => show(key);
+  const step = (dir: -1 | 1) => {
+    const next = shiftPeriod(state.period, dir);
+    show(next.key as QuickKey, next.anchor);
+  };
+  const pickQuarter = (year: number, q: number) => show("quarter", `${year}-${String((q - 1) * 3 + 1).padStart(2, "0")}-01`);
 
   const { data, period, prev } = state;
   const range = `from=${period.fromDay}&to=${period.toDay}`;
@@ -76,6 +100,9 @@ export function FinanceDashboard({ initial, initialKey }: { initial: State; init
         to={period.toDay}
         onQuickSelect={selectQuick}
         quickPending={pending}
+        onStep={STEPPABLE.includes(period.key) ? step : undefined}
+        canStepForward={!isCurrentOrLater(period, new Date())}
+        onPickQuarter={period.key === "quarter" ? pickQuarter : undefined}
       />
 
       <div aria-busy={pending} className={cn("transition-opacity duration-200", pending && "pointer-events-none opacity-40")}>

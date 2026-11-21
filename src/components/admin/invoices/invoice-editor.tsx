@@ -1,19 +1,22 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { IconDownload, IconPrint, IconTrash } from "@/components/icons";
 import { DatePicker } from "@/components/ui/date-picker";
-import { customerDeliveryNotes, deleteInvoice, saveInvoice } from "@/lib/actions/admin/invoices";
+import { deleteInvoice, saveInvoice } from "@/lib/actions/admin/invoices";
+import { getCompany } from "@/lib/actions/admin/companies";
+import { companyBillTo, type Company } from "@/lib/companies";
 import { parsePounds, vatFromGross } from "@/lib/finance/calc";
 import { addressBlock, customerNo, invoiceTotal, lineAmount, manualInvoiceNo, type InvoiceLine, type ManualCustomer, type ManualInvoice, type ProductPick } from "@/lib/invoices";
-import { deliveryNoteNo, type DeliveryLine, type DeliveryNoteOption } from "@/lib/delivery-notes";
+import { deliveryNoteNo } from "@/lib/delivery-notes";
 import { cn, formatPence } from "@/lib/utils";
 import { Button, ButtonLink, Card, Field, Textarea } from "../ui";
-import { SaveBar, SwitchRow, useAction, useConfirm, useUnsavedGuard } from "../controls";
-import { formatDate } from "../format";
+import { SaveBar, Segmented, SwitchRow, useAction, useConfirm, useUnsavedGuard } from "../controls";
 import { CustomerModal } from "@/components/admin/customers/customer-modal";
-import { CustomerBox, DeliverToActions, DeliverToBox, PadDate, PadDropdown, PadInput, PadSearch, RemoveLine } from "@/components/admin/documents/pad-fields";
+import { CompanyModal } from "@/components/admin/companies/company-modal";
+import { CompanyBox, CustomerBox, DeliverToActions, DeliverToBox, PadDate, PadInput, PadSearch, RemoveLine } from "@/components/admin/documents/pad-fields";
 import { PadAction } from "@/components/admin/documents/sheet";
 import { productSuggest } from "@/components/admin/documents/product-suggest";
 import { INVOICE_ROWS, InvoiceRow, InvoiceSheet } from "./invoice-document";
@@ -28,7 +31,10 @@ type ProductLine = { key: number; code: string; description: string; list_price_
 type OldLine = { key: number; old: InvoiceLine };
 type Line = ProductLine | OldLine;
 type Form = {
+  /** Who the invoice is for: a customer, or a company. */
+  bill: "customer" | "company";
   customer_id: string | null;
+  company_id: string | null;
   lines: Line[];
   issued_on: string | null;
   due_on: string | null;
@@ -37,7 +43,6 @@ type Form = {
   deliver_to: string;
   po_number: string;
   customer_code: string;
-  delivery_note_id: string | null;
 };
 
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
@@ -55,27 +60,25 @@ const fromPick = (key: number, p: ProductPick, quantity = "1"): ProductLine => (
   quantity,
 });
 
-function toForm(inv: ManualInvoice | null, customer: ManualCustomer | null, fromNote: DeliveryNoteOption | null, fromItems: DeliveryLine[]): Form {
-  const customerId = customer?.id ?? null;
-  // Invoicing a delivery note: its products come across with their quantities and prices.
-  const copied = fromItems
-    .filter((l) => l.code && l.qty != null && l.unit_price_pence != null)
-    .map((l, i): ProductLine => ({ key: i, code: l.code!, description: l.description, list_price_pence: l.unit_price_pence!, price: pounds(l.unit_price_pence!), quantity: String(l.qty) }));
+function toForm(inv: ManualInvoice | null, customer: ManualCustomer | null, company: Company | null): Form {
   if (!inv)
     return {
-      customer_id: fromNote?.customer_id ?? customerId,
-      lines: copied,
+      bill: company && !customer ? "company" : "customer",
+      customer_id: company && !customer ? null : (customer?.id ?? null),
+      company_id: company && !customer ? company.id : null,
+      lines: [],
       issued_on: today(),
       due_on: null,
       note: "",
       paid: false,
-      deliver_to: fromNote?.deliver_to ?? "",
-      po_number: fromNote?.po_number ?? "",
+      deliver_to: "",
+      po_number: "",
       customer_code: customer?.number ? customerNo(customer.number) : "",
-      delivery_note_id: fromNote?.id ?? null,
     };
   return {
+    bill: inv.company_id || (!inv.customer_id && company) ? "company" : "customer",
     customer_id: inv.customer_id,
+    company_id: inv.company_id,
     lines: inv.items.map((l, i): Line =>
       l.code
         ? { key: i, code: l.code, description: l.description, list_price_pence: l.list_price_pence ?? l.unit_price_pence, price: pounds(l.unit_price_pence), quantity: String(l.quantity) }
@@ -88,7 +91,6 @@ function toForm(inv: ManualInvoice | null, customer: ManualCustomer | null, from
     deliver_to: inv.deliver_to ?? "",
     po_number: inv.po_number ?? "",
     customer_code: inv.customer_code ?? "",
-    delivery_note_id: inv.delivery_note_id,
   };
 }
 
@@ -101,38 +103,36 @@ const parseQty = (v: string) => {
 export function InvoiceEditor({
   invoice,
   customer: initialCustomer = null,
-  deliveryNotes: initialNotes = [],
-  fromNote = null,
-  fromNoteItems = [],
+  company: initialCompany = null,
+  deliveryNote = null,
   vatRate,
 }: {
   invoice: ManualInvoice | null;
   /** Who it is for: the invoice's customer, or the one it was started from. */
   customer: ManualCustomer | null;
-  /** That customer's delivery notes. */
-  deliveryNotes: DeliveryNoteOption[];
-  /** Start a new invoice from this delivery note. */
-  fromNote?: DeliveryNoteOption | null;
-  /** That delivery note's goods. */
-  fromNoteItems?: DeliveryLine[];
+  /** Or the company it is for. */
+  company?: Company | null;
+  /** The delivery note written from this invoice, if any. */
+  deliveryNote?: { id: string; number: number } | null;
   vatRate: number;
 }) {
   const router = useRouter();
   const { run, pending } = useAction();
   const confirm = useConfirm();
   const [customer, setCustomer] = useState(initialCustomer);
-  const [deliveryNotes, setDeliveryNotes] = useState(initialNotes);
-  const [saved, setSaved] = useState(() => toForm(invoice, initialCustomer, fromNote, fromNoteItems));
+  const [company, setCompany] = useState(initialCompany);
+  const [saved, setSaved] = useState(() => toForm(invoice, initialCustomer, initialCompany));
   const [form, setForm] = useState(saved);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [addingCompany, setAddingCompany] = useState(false);
   const nextKey = useRef(form.lines.length);
 
   const dirty = JSON.stringify(form) !== JSON.stringify(saved);
   useUnsavedGuard(dirty);
 
   // An invoice whose customer was removed still shows who it was written for.
-  const orphan = invoice && !invoice.customer_id && !form.customer_id ? invoice.bill_to : null;
+  const orphan = invoice && !invoice.customer_id && !invoice.company_id && !form.customer_id && !form.company_id ? invoice.bill_to : null;
 
   // Quantity times the product's price, as you type.
   const lineValues = form.lines.map((l) => (isProduct(l) ? { quantity: parseQty(l.quantity), unit_price_pence: parsePounds(l.price) } : l.old));
@@ -145,28 +145,34 @@ export function InvoiceEditor({
   const removeLine = (key: number) => setForm((f) => ({ ...f, lines: f.lines.filter((l) => l.key !== key) }));
   const addProduct = (p: ProductPick) => setForm((f) => ({ ...f, lines: [...f.lines, fromPick(nextKey.current++, p)] }));
 
-  const customerNotes = deliveryNotes.filter((n) => n.customer_id === form.customer_id);
-  const chooseCustomer = async (c: ManualCustomer) => {
-    const previousNo = customer?.number ? customerNo(customer.number) : "";
+  const previousCode = form.bill === "company" ? (company?.name ?? "") : customer?.number ? customerNo(customer.number) : "";
+  // The Customer Code box follows who it is for, unless someone typed their own code.
+  const followCode = (f: Form, next: string) => (!f.customer_code.trim() || f.customer_code === previousCode ? next : f.customer_code);
+  const chooseCustomer = (c: ManualCustomer) => {
     setCustomer(c);
-    setForm((f) => ({
-      ...f,
-      customer_id: c.id,
-      // A delivery note only makes sense for its own customer.
-      delivery_note_id: f.customer_id === c.id ? f.delivery_note_id : null,
-      // The Customer Code box follows the customer number, unless someone typed their own code.
-      customer_code: !f.customer_code.trim() || f.customer_code === previousNo ? customerNo(c.number) : f.customer_code,
-    }));
-    if (c.id !== form.customer_id) setDeliveryNotes(await customerDeliveryNotes(c.id).catch(() => []));
+    setForm((f) => ({ ...f, bill: "customer", customer_id: c.id, company_id: null, customer_code: followCode(f, customerNo(c.number)) }));
   };
-  const chooseNote = (id: string | null) => {
-    const n = deliveryNotes.find((x) => x.id === id);
-    // Fill the boxes the delivery note already answers, without overwriting anything typed.
-    setForm((f) => ({ ...f, delivery_note_id: id, deliver_to: f.deliver_to || n?.deliver_to || "", po_number: f.po_number || n?.po_number || "" }));
+  const chooseCompany = (c: Company) => {
+    setCompany(c);
+    setForm((f) => ({ ...f, bill: "company", company_id: c.id, customer_id: null, customer_code: followCode(f, "") }));
   };
+  const switchTo = (bill: Form["bill"]) => {
+    if (bill === form.bill) return;
+    if (bill === "company" && company) return chooseCompany(company);
+    if (bill === "customer" && customer) return chooseCustomer(customer);
+    setForm((f) => ({ ...f, bill, customer_id: null, company_id: null }));
+  };
+  // A customer who belongs to a company: offer to bill the company instead.
+  const billCustomerCompany = async () => {
+    if (!customer?.company_id) return;
+    const c = await getCompany(customer.company_id).catch(() => null);
+    if (c) chooseCompany(c);
+  };
+  const shownBillTo = form.bill === "company" ? (company ? companyBillTo(company) : null) : customer;
 
   const save = async () => {
-    if (!form.customer_id) return setError("Please choose who the invoice is for, or add a new customer.");
+    if (form.bill === "customer" && !form.customer_id) return setError("Please choose the customer the invoice is for, or add a new one.");
+    if (form.bill === "company" && !form.company_id) return setError("Please choose the company the invoice is for, or add a new one.");
     if (!form.lines.length) return setError("Add at least one product, using the search under the goods.");
     for (const [i, l] of form.lines.entries()) {
       if (isProduct(l) && parseQty(l.quantity) == null) return setError(`Line ${i + 1}: how many ${l.description}? Enter a number, like 2 or 1.5.`);
@@ -200,7 +206,8 @@ export function InvoiceEditor({
     const res = await run(() =>
       saveInvoice({
         id: invoice?.id,
-        customer_id: form.customer_id!,
+        customer_id: form.bill === "customer" ? form.customer_id : null,
+        company_id: form.bill === "company" ? form.company_id : null,
         items: form.lines.map((l) =>
           isProduct(l)
             ? { code: l.code, description: l.description, quantity: parseQty(l.quantity)!, unit_price_pence: parsePounds(l.price)!, list_price_pence: l.list_price_pence }
@@ -213,7 +220,6 @@ export function InvoiceEditor({
         deliver_to: form.deliver_to,
         po_number: form.po_number,
         customer_code: form.customer_code,
-        delivery_note_id: form.delivery_note_id,
       }),
     );
     if (!res.ok) return setError(res.error);
@@ -331,6 +337,23 @@ export function InvoiceEditor({
         </div>
       )}
 
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <span className="text-sm text-ink-soft">Invoice to</span>
+        <Segmented
+          value={form.bill}
+          onChange={switchTo}
+          options={[
+            { value: "customer", label: "A customer" },
+            { value: "company", label: "A company" },
+          ]}
+        />
+        {form.bill === "customer" && customer?.company_id && customer.company && (
+          <button type="button" onClick={billCustomerCompany} className="text-sm text-aubergine-700 underline-offset-2 hover:underline">
+            Bill {customer.company} instead
+          </button>
+        )}
+      </div>
+
       <div className="-mx-4 overflow-x-auto bg-cream-200 py-8 sm:mx-0 sm:rounded-[3px]">
         <div className="mx-auto w-fit px-20">
           <InvoiceSheet
@@ -339,25 +362,34 @@ export function InvoiceEditor({
             date={<PadDate value={form.issued_on} onChange={(v) => set("issued_on", v)} label="Invoice date" />}
             page={`1 of ${pages}`}
             delNoteNo={
-              <PadDropdown
-                value={form.delivery_note_id ?? ""}
-                onChange={(v) => chooseNote(v || null)}
-                placeholder={customerNotes.length ? "None" : " "}
-                sheetTitle="Choose a delivery note"
-                aria-label="Delivery note number"
-                disabled={!customerNotes.length}
-                options={[
-                  { value: "", label: "None" },
-                  ...customerNotes.map((n) => ({ value: n.id, label: deliveryNoteNo(n.number), text: String(n.number), hint: formatDate(n.issued_on) })),
-                ]}
-              />
+              deliveryNote ? (
+                <Link href={`/admin/delivery-notes/${deliveryNote.id}`} className="px-1 underline-offset-2 hover:underline" title="Open the delivery note">
+                  {deliveryNoteNo(deliveryNote.number)}
+                </Link>
+              ) : invoice ? (
+                <Link href={`/admin/delivery-notes/new?invoice=${invoice.id}`} className="px-1 font-sans text-[12px] text-aubergine-700 underline-offset-2 hover:underline">
+                  + Write one
+                </Link>
+              ) : null
             }
             customerCode={<PadInput value={form.customer_code} onChange={(e) => set("customer_code", e.target.value)} aria-label="Customer code" />}
             poNumber={<PadInput value={form.po_number} onChange={(e) => set("po_number", e.target.value)} aria-label="PO number" />}
-            invoiceTo={<CustomerBox customer={customer} onChange={chooseCustomer} onAdd={() => setAdding(true)} orphan={orphan} />}
-            invoiceToAction={<PadAction onClick={() => setAdding(true)}>+ New customer</PadAction>}
+            invoiceTo={
+              form.bill === "company" ? (
+                <CompanyBox company={form.company_id ? company : null} onChange={chooseCompany} onAdd={() => setAddingCompany(true)} orphan={orphan} />
+              ) : (
+                <CustomerBox customer={form.customer_id ? customer : null} onChange={chooseCustomer} onAdd={() => setAdding(true)} orphan={orphan} />
+              )
+            }
+            invoiceToAction={
+              form.bill === "company" ? (
+                <PadAction onClick={() => setAddingCompany(true)}>+ New company</PadAction>
+              ) : (
+                <PadAction onClick={() => setAdding(true)}>+ New customer</PadAction>
+              )
+            }
             deliverTo={<DeliverToBox value={form.deliver_to} onChange={(v) => set("deliver_to", v)} />}
-            deliverToAction={<DeliverToActions onPick={(v) => set("deliver_to", v)} invoiceAddress={addressBlock(customer)} />}
+            deliverToAction={<DeliverToActions onPick={(v) => set("deliver_to", v)} invoiceAddress={addressBlock(form.customer_id || form.company_id ? shownBillTo : null)} />}
             rows={rows}
             net={formatPence(total - vat)}
             vat={formatPence(vat)}
@@ -393,6 +425,7 @@ export function InvoiceEditor({
         onClose={() => setAdding(false)}
         onSaved={chooseCustomer}
       />
+      <CompanyModal open={addingCompany} company={null} onClose={() => setAddingCompany(false)} onSaved={chooseCompany} />
     </div>
   );
 }

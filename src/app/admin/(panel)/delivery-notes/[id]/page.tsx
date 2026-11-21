@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { staffDb } from "@/lib/actions/admin/guard";
-import { editorData } from "@/lib/data/invoices";
+import { loadNoteInvoice } from "@/lib/data/delivery-notes";
 import { deliveryNoteNo, type DeliveryNote } from "@/lib/delivery-notes";
 import { PageHeader } from "@/components/admin/ui";
 import { formatDate } from "@/components/admin/format";
@@ -15,16 +15,17 @@ export default async function DeliveryNotePage({ params }: { params: Promise<{ i
   const { data } = await db.from("delivery_notes").select("*").eq("id", id).maybeSingle();
   if (!data) notFound();
   const note = data as DeliveryNote;
-  const { customer } = await editorData(db, note.customer_id);
+  const invoice = note.invoice_id ? await loadNoteInvoice(db, note.invoice_id) : null;
+  const places = (note.destinations ?? []).length;
 
   return (
     <div>
       <PageHeader
         back={{ href: "/admin/delivery-notes", label: "Delivery notes" }}
         title={deliveryNoteNo(note.number)}
-        description={`For ${note.invoice_to.full_name}, dated ${formatDate(note.issued_on)}.`}
+        description={`For ${note.invoice_to.full_name}, dated ${formatDate(note.issued_on)}${places > 1 ? `, going to ${places} places` : ""}.`}
       />
-      <DeliveryNoteEditor note={note} customer={customer} />
+      <DeliveryNoteEditor note={note} invoice={invoice} />
     </div>
   );
 }

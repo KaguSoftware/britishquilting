@@ -12,7 +12,7 @@ import { fail, ok, type ActionResult } from "./types";
  */
 
 function refresh(slug?: string) {
-  revalidatePath("/admin/offers");
+  revalidatePath("/admin/discounts", "layout");
   revalidatePath("/admin/products");
   revalidatePath("/", "layout");
   revalidateTag("products", { expire: 0 });

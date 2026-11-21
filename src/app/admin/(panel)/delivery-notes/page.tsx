@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { IconChevronLeft, IconChevronRight, IconDeliveryNote, IconDownload, IconPlus, IconPrint } from "@/components/icons";
 import { staffDb } from "@/lib/actions/admin/guard";
-import { deliveryNoteNo, type DeliveryLine } from "@/lib/delivery-notes";
+import { deliveryNoteNo, placesSummary, type DeliveryLine, type Destination } from "@/lib/delivery-notes";
 import type { BillTo } from "@/lib/invoices";
 import { cn, formatPence } from "@/lib/utils";
 import { ButtonLink, EmptyState, PageHeader } from "@/components/admin/ui";
@@ -27,7 +27,7 @@ export default async function DeliveryNotesPage({ searchParams }: { searchParams
 
   let rowsQuery = db
     .from("delivery_notes")
-    .select("id, number, invoice_to, deliver_to, items, total_pence, issued_on")
+    .select("id, number, invoice_to, deliver_to, destinations, items, total_pence, issued_on, invoice:invoices!delivery_notes_invoice_id_fkey(number)")
     .order("issued_on", { ascending: false })
     .order("number", { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1);
@@ -52,7 +52,8 @@ export default async function DeliveryNotesPage({ searchParams }: { searchParams
       date: formatDate(n.issued_on),
       name: to.full_name,
       company: to.company,
-      deliverTo: ((n.deliver_to as string | null) ?? "").split("\n")[0] || null,
+      deliverTo: placesSummary((n.destinations ?? []) as Destination[], n.deliver_to as string | null),
+      invoice: (Array.isArray(n.invoice) ? n.invoice[0] : n.invoice) as { number: number } | null,
       goods: `${items.length} line${items.length === 1 ? "" : "s"}`,
       total: items.some((l) => l.amount_pence != null) ? formatPence(n.total_pence) : null,
     };
@@ -112,7 +113,10 @@ export default async function DeliveryNotesPage({ searchParams }: { searchParams
                     <Link href={`/admin/delivery-notes/${r.id}`} className="font-display text-lg tabular-nums text-aubergine-900 hover:underline">
                       {r.label}
                     </Link>
-                    <span className="ml-2 text-xs text-stone-500 md:ml-0 md:block">{r.date}</span>
+                    <span className="ml-2 text-xs text-stone-500 md:ml-0 md:block">
+                      {r.date}
+                      {r.invoice ? ` · INV-M${r.invoice.number}` : ""}
+                    </span>
                   </td>
                   <td className="block md:table-cell md:px-3 md:py-3.5">
                     <span className="font-medium">{r.name}</span>

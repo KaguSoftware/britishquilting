@@ -25,11 +25,33 @@ export function SettingsForm({ initial }: { initial: S }) {
 
   return (
     <div className="space-y-6">
-      <Card title="Announcement bar" description="A short line across the top of every page. Leave empty to hide it.">
+      <Card
+        title="Announcement bar"
+        description="A short line across the top of every page. Leave empty to hide it."
+        className="border-gold-500/70 bg-gold-100/40 shadow-glow"
+      >
         <Field label="Message" htmlFor="ann" hint={`${s.announcement.length} of 200 letters`}>
-          <Input id="ann" value={s.announcement} maxLength={200} onChange={(e) => set("announcement", e.target.value)} placeholder="e.g. Free delivery on orders over £75" />
+          <Input
+            id="ann"
+            value={s.announcement}
+            maxLength={200}
+            onChange={(e) => set("announcement", e.target.value)}
+            placeholder="e.g. Free delivery on orders over £75"
+            className="text-base font-medium text-aubergine-900"
+          />
         </Field>
-        {s.announcement && <p className="mt-3 bg-aubergine-900 px-4 py-2 text-center text-sm text-cream-50">{s.announcement}</p>}
+        <p className="mb-2 mt-5 text-xs text-ink-soft">How it looks on the shop</p>
+        {s.announcement ? (
+          <div className="flex items-center gap-4 rounded-[3px] bg-aubergine-950 px-5 py-4 animate-announce-glow">
+            <span aria-hidden className="hidden h-px flex-1 border-t border-dashed border-gold-500/80 sm:block" />
+            <p className="font-display text-center text-lg leading-snug text-gold-100 md:text-xl">{s.announcement}</p>
+            <span aria-hidden className="hidden h-px flex-1 border-t border-dashed border-gold-500/80 sm:block" />
+          </div>
+        ) : (
+          <p className="rounded-[3px] border border-dashed border-stone-300 px-5 py-4 text-center text-sm text-stone-500">
+            The bar is hidden. Type a message to show it.
+          </p>
+        )}
       </Card>
 
       <Card title="Collection from the shop">

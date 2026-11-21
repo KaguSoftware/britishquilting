@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   IconBolt, IconChart, IconChevronLeft, IconChevronRight, IconClock, IconClose, IconCrown, IconDeliveryNote, IconDocument, IconExternal, IconHome, IconLock, IconLogout,
-  IconMail, IconMenu, IconOffer, IconParcel, IconPencil, IconSearch, IconSettings, IconStar, IconSwatch, IconTag, IconUsers, IconVan,
+  IconMail, IconMenu, IconParcel, IconPencil, IconSearch, IconSettings, IconStar, IconSwatch, IconTag, IconUsers, IconVan,
 } from "@/components/icons";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,6 @@ export const NAV: { group: string; items: NavItem[] }[] = [
       { href: "/admin/products", label: "Products", icon: IconBolt },
       { href: "/admin/categories", label: "Categories", icon: IconSwatch },
       { href: "/admin/discounts", label: "Discounts", icon: IconTag },
-      { href: "/admin/offers", label: "Special offers", icon: IconOffer },
       { href: "/admin/shipping", label: "Shipping", icon: IconVan },
     ],
   },

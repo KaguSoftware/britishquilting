@@ -6,6 +6,7 @@ import { PasswordField } from "@/components/auth/parts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox, Field, FormMessage } from "@/components/ui/field";
+import { DatePicker } from "@/components/ui/date-picker";
 import { changePassword, updateProfile, type FormState } from "@/lib/actions/account";
 
 function useToastOnSuccess(state: FormState) {
@@ -14,7 +15,11 @@ function useToastOnSuccess(state: FormState) {
   }, [state]);
 }
 
-export function ProfileForm({ profile, email }: { profile: { full_name: string | null; phone: string | null; marketing_opt_in: boolean }; email: string | null }) {
+type Profile = { full_name: string | null; phone: string | null; marketing_opt_in: boolean; is_student: boolean; dob: string | null };
+
+const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+
+export function ProfileForm({ profile, email }: { profile: Profile; email: string | null }) {
   const [state, action, pending] = useActionState<FormState, FormData>(updateProfile, null);
   const uid = useId();
   const fe = state?.fieldErrors;
@@ -33,7 +38,11 @@ export function ProfileForm({ profile, email }: { profile: { full_name: string |
         <Field id={`${uid}-email`} label="Email" hint="To change your sign-in email, please contact us." className="sm:col-span-2">
           <Input id={`${uid}-email`} value={email ?? ""} readOnly disabled aria-describedby={`${uid}-email-msg`} />
         </Field>
+        <Field id={`${uid}-dob`} label="Birthday" optional hint="We'll send you a birthday treat." error={fe?.dob}>
+          <DatePicker id={`${uid}-dob`} name="dob" defaultValue={profile.dob} max={today()} placeholder="Add your birthday" yearNav />
+        </Field>
       </div>
+      <Checkbox name="is_student" defaultChecked={profile.is_student} label="I'm a student" description="Studying textiles, fashion or interiors? Let us know." />
       <Checkbox
         name="marketing_opt_in"
         defaultChecked={profile.marketing_opt_in}

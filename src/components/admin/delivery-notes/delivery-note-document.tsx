@@ -9,9 +9,10 @@ export type DeliveryNoteDoc = {
   poNumber?: string | null;
   reference?: string | null;
   invoiceTo: string[];
-  deliverTo: string[];
-  lines: { key: string; quantity: string; description: string; amount: string | null }[];
-  total?: string | null;
+  /** Each place the goods go to, printed as its own sheet(s) with its own Deliver To box. */
+  places: { label: string; deliverTo: string[]; lines: { key: string; quantity: string; description: string; amount: string | null }[]; total?: string | null }[];
+  /** e.g. "Invoice INV-M1023: £420.00", printed after the last place. */
+  total?: { label: string; amount: string } | null;
   note?: string | null;
 };
 
@@ -158,39 +159,49 @@ export function DeliveryNoteSheet({
 
 type RowData = { key: string; quantity?: string; description?: string; amount?: string | null; strong?: boolean; muted?: boolean };
 
-/** A saved delivery note, printed: one A4 sheet per 18 lines. */
+/** A saved delivery note, printed: each place on its own sheets, one A4 sheet per 18 lines. */
 export function DeliveryNoteDocument({ doc, toolbar }: { doc: DeliveryNoteDoc; toolbar?: ReactNode }) {
-  const rows: RowData[] = [
-    ...doc.lines,
-    ...(doc.total ? [{ key: "total", description: "Total", amount: doc.total, strong: true }] : []),
-    ...(doc.note ?? "")
-      .split("\n")
-      .filter((l) => l.trim())
-      .map((l, i) => ({ key: `note-${i}`, description: l })),
-  ];
-  // Leave the last line of a full page for "Continued".
-  const pages = paginate(rows, PAD_ROWS - 1);
+  const many = doc.places.length > 1;
+  const noteRows: RowData[] = (doc.note ?? "")
+    .split("\n")
+    .filter((l) => l.trim())
+    .map((l, i) => ({ key: `note-${i}`, description: l }));
+
+  const sheets = doc.places.flatMap((place, pi) => {
+    const lastPlace = pi === doc.places.length - 1;
+    const rows: RowData[] = [
+      ...(many && place.label ? [{ key: "place", description: place.label, strong: true }] : []),
+      ...place.lines,
+      ...(many && place.total ? [{ key: "place-total", description: `Goods for this place`, amount: place.total, muted: true }] : []),
+      ...(lastPlace && doc.total ? [{ key: "total", description: doc.total.label, amount: doc.total.amount, strong: true }] : []),
+      ...(lastPlace ? noteRows : []),
+    ];
+    // Leave the last line of a full page for "Continued".
+    const pages = paginate(rows, PAD_ROWS - 1);
+    return pages.map((pageRows, p) => {
+      const last = p === pages.length - 1;
+      const filled: RowData[] = last ? pageRows : [...pageRows, { key: "more", description: `Continued on the next page`, muted: true }];
+      const parts = [many ? `place ${pi + 1}/${doc.places.length}` : null, pages.length > 1 ? `page ${p + 1}/${pages.length}` : null].filter(Boolean);
+      return { key: `${pi}-${p}`, place, filled, number: parts.length ? `${doc.number}  (${parts.join(", ")})` : doc.number };
+    });
+  });
 
   return (
     <Paper id={SHEET_ID} toolbar={toolbar}>
-      {pages.map((pageRows, p) => {
-        const last = p === pages.length - 1;
-        const filled: RowData[] = last ? pageRows : [...pageRows, { key: "more", description: `Continued on page ${p + 2}`, muted: true }];
-        return (
-          <DeliveryNoteSheet
-            key={p}
-            number={pages.length > 1 ? `${doc.number}  (${p + 1}/${pages.length})` : doc.number}
-            date={doc.date}
-            poNumber={doc.poNumber}
-            reference={doc.reference}
-            invoiceTo={<AddressLines lines={doc.invoiceTo} />}
-            deliverTo={<AddressLines lines={doc.deliverTo} />}
-            rows={filled.map(({ key, ...r }) => (
-              <DnRow key={key} {...r} />
-            ))}
-          />
-        );
-      })}
+      {sheets.map((sh) => (
+        <DeliveryNoteSheet
+          key={sh.key}
+          number={sh.number}
+          date={doc.date}
+          poNumber={doc.poNumber}
+          reference={doc.reference}
+          invoiceTo={<AddressLines lines={doc.invoiceTo} />}
+          deliverTo={<AddressLines lines={sh.place.deliverTo} />}
+          rows={sh.filled.map(({ key, ...r }) => (
+            <DnRow key={key} {...r} />
+          ))}
+        />
+      ))}
     </Paper>
   );
 }

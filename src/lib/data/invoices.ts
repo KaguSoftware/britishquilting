@@ -2,8 +2,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseCid, type ManualCustomer, type ProductPick } from "@/lib/invoices";
 import type { DeliveryNoteOption } from "@/lib/delivery-notes";
+import { COMPANY_COLS, type Company } from "@/lib/companies";
 
-export const CUSTOMER_COLS = "id, number, full_name, company, email, phone, alt_phone, gender, dob, line1, line2, city, county, postcode, note";
+export const CUSTOMER_COLS =
+  "id, number, full_name, company, company_id, email, phone, alt_phone, gender, dob, is_student, line1, line2, city, county, postcode, alt_line1, alt_line2, alt_city, alt_county, alt_postcode, note";
 export const NOTE_OPTION_COLS = "id, number, customer_id, deliver_to, po_number, issued_on";
 
 /** Whatever matches, best first; used by the customer search on the invoice and delivery note pads. */
@@ -26,15 +28,20 @@ export async function deliveryNotesFor(db: SupabaseClient, customerId: string | 
  * Everything an invoice or delivery note editor needs besides the document itself: only the customer it is
  * for (others are searched as you type), that customer's delivery notes and the VAT rate.
  */
-export async function editorData(db: SupabaseClient, customerId: string | null | undefined) {
-  const id = customerId && /^[0-9a-f-]{36}$/i.test(customerId) ? customerId : null;
-  const [{ data: customer }, deliveryNotes, { data: settings }] = await Promise.all([
+const uuid = (v: string | null | undefined) => (v && /^[0-9a-f-]{36}$/i.test(v) ? v : null);
+
+export async function editorData(db: SupabaseClient, customerId: string | null | undefined, companyId?: string | null) {
+  const id = uuid(customerId);
+  const cid = uuid(companyId);
+  const [{ data: customer }, { data: company }, deliveryNotes, { data: settings }] = await Promise.all([
     id ? db.from("manual_customers").select(CUSTOMER_COLS).eq("id", id).maybeSingle() : Promise.resolve({ data: null }),
+    cid ? db.from("companies").select(COMPANY_COLS).eq("id", cid).maybeSingle() : Promise.resolve({ data: null }),
     deliveryNotesFor(db, id),
     db.from("finance_settings").select("vat_rate").maybeSingle(),
   ]);
   return {
     customer: (customer ?? null) as ManualCustomer | null,
+    company: (company ?? null) as Company | null,
     deliveryNotes: customer ? deliveryNotes : [],
     vatRate: Number(settings?.vat_rate ?? 20),
   };

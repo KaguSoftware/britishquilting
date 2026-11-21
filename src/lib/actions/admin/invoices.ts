@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { vatFromGross } from "@/lib/finance/calc";
+import { COMPANY_COLS, companyBillTo, type Company } from "@/lib/companies";
 import { customerNo, invoiceTotal, type BillTo, type InvoiceLine, type ManualCustomer, type ProductPick } from "@/lib/invoices";
-import { deliveryNotesFor, findManualCustomers, findProducts, productPrices } from "@/lib/data/invoices";
+import { CUSTOMER_COLS, deliveryNotesFor, findManualCustomers, findProducts, productPrices } from "@/lib/data/invoices";
 import type { DeliveryNoteOption } from "@/lib/delivery-notes";
 import { contactTakenMessage } from "@/lib/customer-contact";
 import { phoneProblem } from "@/lib/phone";
@@ -23,6 +24,7 @@ const customerSchema = z.object({
   id: z.uuid().optional(),
   full_name: z.string().trim().min(2, "Please enter the customer's name").max(120),
   company: text(120),
+  company_id: z.uuid().nullish().transform((v) => v ?? null),
   email: z
     .string()
     .trim()
@@ -47,11 +49,17 @@ const customerSchema = z.object({
     .nullish()
     .transform((v) => v || null)
     .refine((v) => v == null || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v <= new Date().toISOString().slice(0, 10)), "That date of birth doesn't look right"),
+  is_student: z.boolean().default(false),
   line1: text(200),
   line2: text(200),
   city: text(100),
   county: text(100),
   postcode: text(12),
+  alt_line1: text(200),
+  alt_line2: text(200),
+  alt_city: text(100),
+  alt_county: text(100),
+  alt_postcode: text(12),
   note: text(1000),
 });
 
@@ -86,7 +94,7 @@ export async function saveManualCustomer(input: ManualCustomerInput): Promise<Ac
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Please check the customer's details.");
   const { db, viewer } = await staffDb();
   const { id, ...row } = parsed.data;
-  const cols = "id, number, full_name, company, email, phone, alt_phone, gender, dob, line1, line2, city, county, postcode, note";
+  const cols = CUSTOMER_COLS;
   if (id) {
     const { data, error } = await db.from("manual_customers").update(row).eq("id", id).select(cols).single();
     if (error || !data) return fail(contactTakenMessage(error, { showCid: true }) ?? "Couldn't save the customer. Please try again.");
@@ -105,6 +113,19 @@ export async function saveManualCustomer(input: ManualCustomerInput): Promise<Ac
   return ok(data as ManualCustomer, `Customer added as ${customerNo((data as ManualCustomer).number)}.`);
 }
 
+/** The staff note on a customer added by hand, edited in place on the Customers pages. */
+export async function saveManualCustomerNote(id: string, note: string): Promise<ActionResult> {
+  if (!z.uuid().safeParse(id).success) return fail("Invalid customer.");
+  const value = String(note ?? "").trim().slice(0, 1000) || null;
+  const { db, viewer } = await staffDb();
+  const { error } = await db.from("manual_customers").update({ note: value }).eq("id", id);
+  if (error) return fail("Couldn't save the note.");
+  await audit(db, viewer.id, "manual_customer.note", "manual_customer", id);
+  refresh();
+  revalidatePath(`/admin/customers/manual/${id}`);
+  return ok(undefined, "Note saved.");
+}
+
 /** Invoices already written for this customer keep their copy of the details. */
 export async function deleteManualCustomer(id: string): Promise<ActionResult> {
   if (!z.uuid().safeParse(id).success) return fail("Invalid customer.");
@@ -121,7 +142,8 @@ const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Please choose a date");
 const invoiceSchema = z
   .object({
     id: z.uuid().optional(),
-    customer_id: z.uuid({ message: "Please choose who the invoice is for" }),
+    customer_id: z.uuid().nullish().transform((v) => v ?? null),
+    company_id: z.uuid().nullish().transform((v) => v ?? null),
     items: z
       .array(
         z.object({
@@ -140,9 +162,9 @@ const invoiceSchema = z
     deliver_to: text(500),
     po_number: text(60),
     customer_code: text(40),
-    delivery_note_id: z.uuid().nullish().transform((v) => v ?? null),
     paid: z.boolean(),
   })
+  .refine((v) => !!v.customer_id !== !!v.company_id, "Please choose who the invoice is for: a customer or a company")
   .refine((v) => !v.due_on || v.due_on >= v.issued_on, "The due date can't be before the invoice date");
 
 export type InvoiceInput = z.input<typeof invoiceSchema>;
@@ -150,20 +172,22 @@ export type InvoiceInput = z.input<typeof invoiceSchema>;
 export async function saveInvoice(input: InvoiceInput): Promise<ActionResult<{ id: string }>> {
   const parsed = invoiceSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Please check the invoice.");
-  const { id, customer_id, paid, ...rest } = parsed.data;
+  const { id, customer_id, company_id, paid, ...rest } = parsed.data;
   const { db, viewer } = await staffDb();
 
   const codes = [...new Set(rest.items.flatMap((l) => (l.code ? [l.code.toUpperCase()] : [])))];
-  const [{ data: customer }, { data: settings }, existing, note, price] = await Promise.all([
-    db.from("manual_customers").select("number, full_name, company, email, phone, line1, line2, city, county, postcode").eq("id", customer_id).maybeSingle(),
+  const [{ data: customer }, { data: company }, { data: settings }, existing, price] = await Promise.all([
+    customer_id
+      ? db.from("manual_customers").select("number, full_name, company, email, phone, line1, line2, city, county, postcode").eq("id", customer_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    company_id ? db.from("companies").select(COMPANY_COLS).eq("id", company_id).maybeSingle() : Promise.resolve({ data: null }),
     db.from("finance_settings").select("vat_rate").maybeSingle(),
     id ? db.from("invoices").select("paid_at, items").eq("id", id).maybeSingle() : Promise.resolve({ data: null }),
-    rest.delivery_note_id ? db.from("delivery_notes").select("customer_id").eq("id", rest.delivery_note_id).maybeSingle() : Promise.resolve({ data: null }),
     productPrices(db, codes),
   ]);
-  if (!customer) return fail("That customer has been removed. Please choose another.");
+  if (customer_id && !customer) return fail("That customer has been removed. Please choose another.");
+  if (company_id && !company) return fail("That company has been removed. Please choose another.");
   if (id && !existing.data) return fail("That invoice has been deleted.");
-  if (rest.delivery_note_id && note.data?.customer_id !== customer_id) return fail("That delivery note is for a different customer. Please choose another.");
 
   // Every line is a product picked from the search. Its price can be changed by hand (the editor asks first); the
   // shop's price is kept beside it. Lines the invoice was already saved with are kept, even if the product has gone.
@@ -188,7 +212,8 @@ export async function saveInvoice(input: InvoiceInput): Promise<ActionResult<{ i
     ...rest,
     items,
     customer_id,
-    bill_to: customer as BillTo,
+    company_id,
+    bill_to: company ? companyBillTo(company as Company) : (customer as BillTo),
     total_pence: total,
     vat_included_pence: vatFromGross(total, Number(settings?.vat_rate ?? 20)),
     paid_at: paid ? (existing.data?.paid_at ?? new Date().toISOString()) : null,

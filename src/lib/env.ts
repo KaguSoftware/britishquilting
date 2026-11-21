@@ -27,6 +27,7 @@ const schema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.string().min(1).optional(),
   STAFF_NOTIFY_EMAIL: z.email("STAFF_NOTIFY_EMAIL must be a valid email address").optional(),
+  CRON_SECRET: z.string().min(16, "CRON_SECRET should be at least 16 characters").optional(),
 });
 
 // An unset var left blank in .env.local (e.g. `STRIPE_SECRET_KEY=`) reads back as "",
@@ -48,6 +49,7 @@ const raw = {
   RESEND_API_KEY: orUndefined(process.env.RESEND_API_KEY),
   EMAIL_FROM: orUndefined(process.env.EMAIL_FROM),
   STAFF_NOTIFY_EMAIL: orUndefined(process.env.STAFF_NOTIFY_EMAIL),
+  CRON_SECRET: orUndefined(process.env.CRON_SECRET),
 };
 
 const parsed = schema.safeParse(raw);

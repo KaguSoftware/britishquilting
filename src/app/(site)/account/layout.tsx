@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AccountNav } from "@/components/account/account-nav";
 import { getViewer } from "@/lib/data/catalog";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: { default: "Your account", template: "%s · Your account" }, robots: { index: false } };
 
@@ -12,10 +13,15 @@ export default async function AccountLayout({ children }: { children: React.Reac
     redirect("/login?next=%2Faccount");
   }
 
+  // New accounts answer the welcome questions (student, birthday) once before anything else.
+  const supabase = await createClient();
+  const { data: profile } = await supabase.from("profiles").select("onboarded_at").eq("id", viewer.id).maybeSingle();
+  if (profile && !profile.onboarded_at) redirect("/welcome?next=%2Faccount");
+
   const first = viewer.fullName?.split(" ")[0];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pb-24 pt-10 md:px-8 md:pb-32 md:pt-16">
+    <div className="mx-auto max-w-7xl px-4 pb-24 pt-24 md:px-8 md:pb-32 md:pt-32">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-300 pb-8">
         <div>
           <p className="font-display text-lg italic text-gold-600">{first ? `Hello, ${first}` : "Welcome back"}</p>

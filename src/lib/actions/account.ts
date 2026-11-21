@@ -40,13 +40,27 @@ const phone = z
   .refine((s) => s === "" || /^[+()\d\s-]{7,}$/.test(s), "Please enter a valid phone number.")
   .transform((s) => (s === "" ? null : s));
 
+const londonToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+
+/** A birthday as YYYY-MM-DD, or null when left empty. */
+const dob = z
+  .string()
+  .transform((s) => (s === "" ? null : s))
+  .refine((v) => v == null || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v >= "1900-01-01" && v <= londonToday()), "Please choose your birthday from the calendar.");
+
 /* ─────────────── Profile */
 export async function updateProfile(_: FormState, form: FormData): Promise<FormState> {
   const { supabase, user } = await authed();
   if (!user) return signedOut;
   const parsed = z
-    .object({ full_name: z.string().min(2, "Please enter your name.").max(120), phone, marketing_opt_in: z.boolean() })
-    .safeParse({ full_name: str(form, "full_name"), phone: str(form, "phone"), marketing_opt_in: form.get("marketing_opt_in") === "on" });
+    .object({ full_name: z.string().min(2, "Please enter your name.").max(120), phone, marketing_opt_in: z.boolean(), is_student: z.boolean(), dob })
+    .safeParse({
+      full_name: str(form, "full_name"),
+      phone: str(form, "phone"),
+      marketing_opt_in: form.get("marketing_opt_in") === "on",
+      is_student: form.get("is_student") === "on",
+      dob: str(form, "dob"),
+    });
   if (!parsed.success) return { fieldErrors: z.flattenError(parsed.error).fieldErrors };
 
   const { error } = await supabase.from("profiles").update(parsed.data).eq("id", user.id);
@@ -58,6 +72,25 @@ export async function updateProfile(_: FormState, form: FormData): Promise<FormS
   await supabase.auth.updateUser({ data: { full_name: parsed.data.full_name } });
   revalidatePath("/account", "layout");
   return { ok: true, message: "Your details have been saved." };
+}
+
+/* ─────────────── Welcome step, straight after signing up */
+export async function completeOnboarding(_: FormState, form: FormData): Promise<FormState> {
+  const { supabase, user } = await authed();
+  if (!user) return signedOut;
+  const skip = form.get("skip") === "1";
+  const student = str(form, "is_student");
+  const parsed = z
+    .object({ is_student: z.boolean().nullable(), dob })
+    .safeParse({ is_student: student === "yes" ? true : student === "no" ? false : null, dob: skip ? "" : str(form, "dob") });
+  if (!parsed.success) return { fieldErrors: z.flattenError(parsed.error).fieldErrors };
+  if (!skip && parsed.data.is_student == null) return { fieldErrors: { is_student: ["Please choose yes or no."] } };
+
+  const row = skip ? { onboarded_at: new Date().toISOString() } : { ...parsed.data, onboarded_at: new Date().toISOString() };
+  const { error } = await supabase.from("profiles").update(row).eq("id", user.id);
+  if (error) return { message: "We couldn't save that. Please try again." };
+  revalidatePath("/account", "layout");
+  return { ok: true };
 }
 
 /* ─────────────── Password */

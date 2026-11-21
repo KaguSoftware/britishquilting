@@ -99,8 +99,12 @@ export function taxYearStart(day: Ymd) {
   return day.m > 4 || (day.m === 4 && day.d >= 6) ? day.y : day.y - 1;
 }
 
-export function resolvePeriod(key: PeriodKey, now: Date, custom?: { from?: string | null; to?: string | null }): Period {
-  const t = londonDay(now);
+/**
+ * The period of this kind that contains `now`, or, when `anchor` (yyyy-mm-dd) is given, the one that contains
+ * that day instead: how the arrows step back through earlier months, quarters and years.
+ */
+export function resolvePeriod(key: PeriodKey, now: Date, custom?: { from?: string | null; to?: string | null }, anchor?: string | null): Period {
+  const t = (anchor && isoToYmd(anchor)) || londonDay(now);
   switch (key) {
     case "last_month": {
       const from = norm(t.y, t.m - 1, 1);
@@ -128,6 +132,33 @@ export function resolvePeriod(key: PeriodKey, now: Date, custom?: { from?: strin
     default:
       return build("month", { y: t.y, m: t.m, d: 1 }, norm(t.y, t.m + 1, 1), monthFmt.format(new Date(Date.UTC(t.y, t.m - 1, 1))));
   }
+}
+
+/** Kinds of period the arrows can step through. "Last month" steps as a month. */
+export const STEPPABLE: PeriodKey[] = ["month", "last_month", "quarter", "year", "tax_year"];
+
+/** A day inside the period `dir` steps before (-1) or after (+1) this one, to pass as resolvePeriod's anchor. */
+export function shiftPeriod(p: Period, dir: -1 | 1): { key: PeriodKey; anchor: string } {
+  const from = isoToYmd(p.fromDay)!;
+  switch (p.key) {
+    case "quarter":
+      return { key: "quarter", anchor: ymdToIso(norm(from.y, from.m + 3 * dir, 1)) };
+    case "year":
+      return { key: "year", anchor: ymdToIso({ y: from.y + dir, m: 1, d: 1 }) };
+    case "tax_year":
+      return { key: "tax_year", anchor: ymdToIso({ y: from.y + dir, m: 4, d: 6 }) };
+    default:
+      return { key: "month", anchor: ymdToIso(norm(from.y, from.m + dir, 1)) };
+  }
+}
+
+/** True while the period hasn't finished yet, so there is nothing after it to step to. */
+export const isCurrentOrLater = (p: Period, now: Date) => p.end.getTime() > now.getTime();
+
+/** The quarter (1 to 4) and year of a period's first day. */
+export function quarterOf(p: Pick<Period, "fromDay">) {
+  const from = isoToYmd(p.fromDay)!;
+  return { year: from.y, q: Math.floor((from.m - 1) / 3) + 1 };
 }
 
 /** The period just before, of the same kind (same length in days for custom ranges). */

@@ -15,7 +15,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const { data } = await db.from("invoices").select("*").eq("id", id).maybeSingle();
   if (!data) notFound();
   const invoice = data as ManualInvoice;
-  const { customer, deliveryNotes, vatRate } = await editorData(db, invoice.customer_id);
+  const [{ customer, company, vatRate }, { data: note }] = await Promise.all([
+    editorData(db, invoice.customer_id, invoice.company_id),
+    db.from("delivery_notes").select("id, number").eq("invoice_id", invoice.id).maybeSingle(),
+  ]);
 
   return (
     <div>
@@ -37,7 +40,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         }
         description={`For ${invoice.bill_to.full_name}, dated ${formatDate(invoice.issued_on)}.`}
       />
-      <InvoiceEditor invoice={invoice} customer={customer} deliveryNotes={deliveryNotes} vatRate={vatRate} />
+      <InvoiceEditor invoice={invoice} customer={customer} company={company} deliveryNote={note ?? null} vatRate={vatRate} />
     </div>
   );
 }

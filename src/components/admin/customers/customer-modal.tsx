@@ -4,10 +4,11 @@ import { useState } from "react";
 import { saveManualCustomer } from "@/lib/actions/admin/invoices";
 import { GENDERS, customerNo, type ManualCustomer } from "@/lib/invoices";
 import { Button, Field, Input, Select, Textarea } from "../ui";
-import { Modal, useAction } from "../controls";
+import { Modal, Switch, useAction } from "../controls";
+import { CompanyPicker } from "../companies/company-picker";
+import { AddressFields } from "./address-fields";
 import { parseInternational, phoneProblem, phoneRule, trimNational } from "@/lib/phone";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Disclosure } from "@/components/ui/disclosure";
 import { IconPlus } from "@/components/icons";
 
 type Form = Omit<ManualCustomer, "id" | "full_name" | "number"> & {
@@ -18,16 +19,23 @@ type Form = Omit<ManualCustomer, "id" | "full_name" | "number"> & {
 const blank = (): Form => ({
   full_name: "",
   company: "",
+  company_id: null,
   email: "",
   phone: "",
   alt_phone: "",
   gender: null,
   dob: null,
+  is_student: false,
   line1: "",
   line2: "",
   city: "",
   county: "",
   postcode: "",
+  alt_line1: "",
+  alt_line2: "",
+  alt_city: "",
+  alt_county: "",
+  alt_postcode: "",
   note: "",
 });
 
@@ -45,7 +53,7 @@ function splitPhone(v: string | null): [string, string] {
 }
 
 /** A phone number as two boxes, the country code and the number. The form keeps one string, "+44 7785 367252". */
-function PhoneField({
+export function PhoneField({
   label,
   hint,
   id,
@@ -157,7 +165,6 @@ function CustomerForm({ customer, onClose, onSaved }: { customer: ManualCustomer
   // The second number shows as a small link until it is clicked, or the customer already has one.
   const [altOpen, setAltOpen] = useState(() => !!customer?.alt_phone);
   const [altClicked, setAltClicked] = useState(false);
-  const [hasAddress] = useState(() => !!customer && [customer.line1, customer.line2, customer.city, customer.county, customer.postcode].some(Boolean));
 
   const set =
     <K extends keyof Form>(k: K) =>
@@ -187,8 +194,17 @@ function CustomerForm({ customer, onClose, onSaved }: { customer: ManualCustomer
       <Field label="Name" htmlFor="c-name" className="sm:col-span-3">
         <Input id="c-name" value={form.full_name} onChange={set("full_name")} autoComplete="off" autoFocus />
       </Field>
-      <Field label="Company" htmlFor="c-company" className="sm:col-span-3">
-        <Input id="c-company" value={form.company ?? ""} onChange={set("company")} autoComplete="off" />
+      <Field
+        label="Company"
+        htmlFor="c-company"
+        className="sm:col-span-3"
+        hint={!form.company_id && form.company ? `Written as “${form.company}”. Pick or add it to link them.` : undefined}
+      >
+        <CompanyPicker
+          id="c-company"
+          value={form.company_id ? { id: form.company_id, name: form.company ?? "" } : null}
+          onChange={(c) => setForm((f) => ({ ...f, company_id: c?.id ?? null, company: c?.name ?? (f.company_id ? null : f.company) }))}
+        />
       </Field>
       <PhoneField label="Telephone" id="c-phone" value={form.phone} onChange={(phone) => setForm((f) => ({ ...f, phone }))} placeholder="7700 900123" className="sm:col-span-3" />
       {altOpen ? (
@@ -230,35 +246,12 @@ function CustomerForm({ customer, onClose, onSaved }: { customer: ManualCustomer
         <DatePicker id="c-dob" value={form.dob} onChange={(dob) => setForm((f) => ({ ...f, dob }))} max={new Date().toISOString().slice(0, 10)} placeholder="Not set" yearNav />
       </Field>
 
-      {/* The address stays folded away until it is wanted, or when the customer already has one. */}
-      <Disclosure
-        defaultOpen={hasAddress}
-        className="border-t border-ink/10 sm:col-span-6"
-        buttonClassName="text-sm font-medium text-ink"
-        panelClassName="grid gap-4 p-1 pb-2 sm:grid-cols-6"
-        summary={
-          <span className="flex flex-wrap items-baseline gap-x-3">
-            Address
-            <span className="text-xs font-normal text-stone-500">{[form.line1, form.city, form.postcode].filter(Boolean).join(", ")}</span>
-          </span>
-        }
-      >
-        <Field label="First line" htmlFor="c-line1" className="sm:col-span-3">
-          <Input id="c-line1" value={form.line1 ?? ""} onChange={set("line1")} autoComplete="off" />
-        </Field>
-        <Field label="Second line" htmlFor="c-line2" className="sm:col-span-3">
-          <Input id="c-line2" value={form.line2 ?? ""} onChange={set("line2")} autoComplete="off" />
-        </Field>
-        <Field label="Town or city" htmlFor="c-city" className="sm:col-span-2">
-          <Input id="c-city" value={form.city ?? ""} onChange={set("city")} autoComplete="off" />
-        </Field>
-        <Field label="County" htmlFor="c-county" className="sm:col-span-2">
-          <Input id="c-county" value={form.county ?? ""} onChange={set("county")} autoComplete="off" />
-        </Field>
-        <Field label="Postcode" htmlFor="c-postcode" className="sm:col-span-2">
-          <Input id="c-postcode" value={form.postcode ?? ""} onChange={set("postcode")} className="uppercase" autoComplete="off" />
-        </Field>
-      </Disclosure>
+      <div className="flex items-center justify-between gap-3 self-end rounded-sm border border-stone-300 px-3 py-2.5 sm:col-span-2">
+        <span className="text-sm text-ink">Student</span>
+        <Switch checked={form.is_student} onChange={(is_student) => setForm((f) => ({ ...f, is_student }))} label="Student" size="sm" />
+      </div>
+
+      <AddressFields value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} idPrefix="c" />
       <Field label="Note" hint="Only staff see this." htmlFor="c-note" className="sm:col-span-6">
         <Textarea id="c-note" value={form.note ?? ""} onChange={set("note")} rows={2} />
       </Field>

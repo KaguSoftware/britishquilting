@@ -6,7 +6,7 @@ import { audit, ownerDb } from "./guard";
 import { fail, ok, type ActionResult } from "./types";
 import { EXPENSE_CATEGORIES } from "@/lib/finance/categories";
 import { loadFinance, type FinanceData } from "@/lib/data/finance";
-import { previousPeriod, resolvePeriod, type Period, type PeriodKey } from "@/lib/finance/calc";
+import { isoToYmd, previousPeriod, resolvePeriod, type Period, type PeriodKey } from "@/lib/finance/calc";
 
 const CATS = EXPENSE_CATEGORIES.map((c) => c.value) as [string, ...string[]];
 
@@ -126,7 +126,6 @@ export async function saveFinanceSettings(input: z.input<typeof settingsSchema>)
 
 const vatRateSchema = z.object({ vat_rate: z.number().min(0).max(99) });
 
-/** Kept separate from fee saving so the VAT rate, which affects every future order, can't be changed by accident. */
 const QUICK_KEYS = ["month", "last_month", "quarter", "year", "tax_year"] as const;
 type QuickPeriodKey = (typeof QUICK_KEYS)[number];
 
@@ -136,15 +135,18 @@ type QuickPeriodKey = (typeof QUICK_KEYS)[number];
  * instead of a full page round-trip. Only the fixed keys, since a custom date range can't be
  * prefetched ahead of time.
  */
-export async function getFinancePeriod(key: QuickPeriodKey): Promise<{ data: FinanceData; period: Period; prev: Period }> {
+export async function getFinancePeriod(key: QuickPeriodKey, at?: string | null): Promise<{ data: FinanceData; period: Period; prev: Period }> {
   if (!QUICK_KEYS.includes(key)) throw new Error("Invalid period");
+  // `at` is any day inside an earlier (or later) period, from the arrows; otherwise the one that contains today.
+  const anchor = typeof at === "string" && isoToYmd(at) ? at : null;
   const { db } = await ownerDb();
-  const period = resolvePeriod(key as PeriodKey, new Date());
+  const period = resolvePeriod(key as PeriodKey, new Date(), undefined, anchor);
   const prev = previousPeriod(period);
   const data = await loadFinance(db, period, prev);
   return { data, period, prev };
 }
 
+/** Kept separate from fee saving so the VAT rate, which affects every future order, can't be changed by accident. */
 export async function saveVatRate(input: z.input<typeof vatRateSchema>): Promise<ActionResult> {
   const parsed = vatRateSchema.safeParse(input);
   if (!parsed.success) return fail("Please enter a valid VAT rate.");

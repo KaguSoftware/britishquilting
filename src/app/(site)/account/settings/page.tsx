@@ -9,7 +9,7 @@ export default async function SettingsPage() {
   const viewer = await requireViewer("/account/settings");
   const supabase = await createClient();
   const [{ data: profile }, { data: auth }] = await Promise.all([
-    supabase.from("profiles").select("full_name, phone, marketing_opt_in").eq("id", viewer.id).maybeSingle(),
+    supabase.from("profiles").select("full_name, phone, marketing_opt_in, is_student, dob").eq("id", viewer.id).maybeSingle(),
     supabase.auth.getUser(),
   ]);
   const providers = (auth.user?.identities ?? []).map((i) => i.provider);
@@ -24,7 +24,16 @@ export default async function SettingsPage() {
     <div className="space-y-16">
       <section>
         <SectionHead n="i." title="Your details" />
-        <ProfileForm profile={{ full_name: profile?.full_name ?? viewer.fullName, phone: profile?.phone ?? null, marketing_opt_in: profile?.marketing_opt_in ?? false }} email={viewer.email} />
+        <ProfileForm
+          profile={{
+            full_name: profile?.full_name ?? viewer.fullName,
+            phone: profile?.phone ?? null,
+            marketing_opt_in: profile?.marketing_opt_in ?? false,
+            is_student: profile?.is_student ?? false,
+            dob: profile?.dob ?? null,
+          }}
+          email={viewer.email}
+        />
       </section>
 
       <section className="border-t border-stone-300 pt-12">

@@ -83,6 +83,19 @@ export function OrderSummary({
         })}
       </ul>
 
+      {/* Birthday treat, taken off automatically */}
+      {quote?.birthday?.applied && (
+        <div className="border-t border-stone-300 py-4">
+          <p className="font-display text-xl text-aubergine-900">
+            <em>Happy birthday!</em>
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-ink-soft">
+            Your birthday treat of {quote.birthday.label} has been taken off, no code needed.
+            {quote.birthday.beatCode && " It saves you more than your code, so we've used it instead."}
+          </p>
+        </div>
+      )}
+
       {/* Discount code */}
       <div className="border-t border-stone-300 pt-4">
         {code.applied ? (
@@ -133,7 +146,13 @@ export function OrderSummary({
       {/* Totals */}
       <dl className={cn("mt-5 space-y-2 border-t border-stone-300 pt-4 text-sm transition-opacity", quoting && "opacity-60")} aria-live="polite" aria-busy={quoting}>
         <Row label="Subtotal" value={quote ? formatPence(quote.subtotal) : null} />
-        {quote && quote.discount > 0 && <Row label={`Discount${quote.discountCode ? ` (${quote.discountCode})` : ""}`} value={`-${formatPence(quote.discount)}`} accent />}
+        {quote && quote.discount > 0 && (
+          <Row
+            label={quote.birthday?.applied ? `Birthday treat (${quote.birthday.label})` : `Discount${quote.discountCode ? ` (${quote.discountCode})` : ""}`}
+            value={`-${formatPence(quote.discount)}`}
+            accent
+          />
+        )}
         <Row
           label={deliveryLabel}
           value={quote ? (fulfilment === "collection" || quote.shipping === 0 ? "Free" : formatPence(quote.shipping)) : null}

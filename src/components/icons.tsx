@@ -171,6 +171,17 @@ export const IconOffer = (p: IconProps) => (
     <circle cx="14.4" cy="14.4" r="1.1" />
   </Svg>
 );
+/** A wrapped parcel with a bow, its ribbon stitched down, for birthday treats */
+export const IconGift = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="4" y="10" width="16" height="10" rx="1" />
+    <path d="M3 7.5h18V10H3z" />
+    <path d="M12 7.5V20" />
+    <path d="M12 7.5c-1.2-2.6-4.6-3.6-5.3-1.7-.5 1.5 1.6 1.9 5.3 1.7Z" />
+    <path d="M12 7.5c1.2-2.6 4.6-3.6 5.3-1.7.5 1.5-1.6 1.9-5.3 1.7Z" />
+    <Stitch d="M6.5 13h3.5M14 13h3.5" />
+  </Svg>
+);
 export const IconCard = (p: IconProps) => (
   <Svg {...p}>
     <rect x="3" y="5.5" width="18" height="13" rx="1.5" />

@@ -2,8 +2,38 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { audit, staffDb } from "./guard";
+import { audit, ownerDb, staffDb } from "./guard";
 import { fail, ok, type ActionResult } from "./types";
+
+/* ───────────────────────── Birthday treats */
+
+const birthdaySchema = z
+  .object({
+    birthday_enabled: z.boolean(),
+    birthday_kind: z.enum(["percent", "fixed"]),
+    birthday_value: z.number().int().min(0),
+    birthday_days: z.number().int().min(1, "It needs to last at least one day").max(60, "Keep it to 60 days or fewer"),
+    birthday_min_subtotal_pence: z.number().int().min(0).max(100_000_00),
+  })
+  .superRefine((d, ctx) => {
+    if (d.birthday_kind === "percent" && (d.birthday_value < 1 || d.birthday_value > 100))
+      ctx.addIssue({ code: "custom", path: ["birthday_value"], message: "The percentage must be between 1 and 100" });
+    if (d.birthday_kind === "fixed" && d.birthday_value < 1) ctx.addIssue({ code: "custom", path: ["birthday_value"], message: "Please enter how much money comes off" });
+  });
+
+export type BirthdayInput = z.input<typeof birthdaySchema>;
+
+/** Owner only: what the automatic birthday treat takes off, and for how many days. */
+export async function saveBirthdaySettings(input: BirthdayInput): Promise<ActionResult> {
+  const parsed = birthdaySchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Please check the birthday treat.");
+  const { db, viewer } = await ownerDb();
+  const { error } = await db.from("store_settings").update(parsed.data).eq("id", 1);
+  if (error) return fail("Couldn't save the birthday treat.");
+  await audit(db, viewer.id, "birthday.settings", "store_settings", null, parsed.data);
+  revalidatePath("/admin/discounts", "layout");
+  return ok(undefined, parsed.data.birthday_enabled ? "Birthday treat saved." : "Birthday treat switched off.");
+}
 
 /* ───────────────────────── Discounts */
 
@@ -46,7 +76,7 @@ export async function saveDiscount(input: DiscountInput): Promise<ActionResult<{
     : await db.from("discount_codes").insert(row).select("id").single();
   if (res.error) return fail("Couldn't save the discount.");
   await audit(db, viewer.id, id ? "discount.update" : "discount.create", "discount", res.data.id, { code: row.code });
-  revalidatePath("/admin/discounts");
+  revalidatePath("/admin/discounts", "layout");
   return ok({ id: res.data.id }, id ? "Discount saved." : `${row.code} is ready to use.`);
 }
 
@@ -55,7 +85,7 @@ export async function setDiscountActive(id: string, active: boolean): Promise<Ac
   const { error } = await db.from("discount_codes").update({ is_active: active }).eq("id", id);
   if (error) return fail("Couldn't update the discount.");
   await audit(db, viewer.id, active ? "discount.enable" : "discount.disable", "discount", id);
-  revalidatePath("/admin/discounts");
+  revalidatePath("/admin/discounts", "layout");
   return ok(undefined, active ? "Code switched on." : "Code switched off.");
 }
 
@@ -67,7 +97,7 @@ export async function deleteDiscount(id: string): Promise<ActionResult<{ row: Re
   const { error } = await db.from("discount_codes").delete().eq("id", id);
   if (error) return fail("Couldn't delete the code. Try switching it off instead.");
   await audit(db, viewer.id, "discount.delete", "discount", id, { code: row.code });
-  revalidatePath("/admin/discounts");
+  revalidatePath("/admin/discounts", "layout");
   return ok({ row }, `${row.code} deleted.`);
 }
 
@@ -78,7 +108,7 @@ export async function restoreDiscount(row: Record<string, unknown>): Promise<Act
   const { error } = await db.from("discount_codes").insert(clean);
   if (error) return fail("Couldn't bring the code back.");
   await audit(db, viewer.id, "discount.restore", "discount", String(row.id));
-  revalidatePath("/admin/discounts");
+  revalidatePath("/admin/discounts", "layout");
   return ok();
 }
 

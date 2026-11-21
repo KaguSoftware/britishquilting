@@ -4,6 +4,8 @@ import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type Reac
 import { createPortal } from "react-dom";
 import { IconClose, IconSearch } from "@/components/icons";
 import { searchManualCustomers } from "@/lib/actions/admin/invoices";
+import { searchCompanies } from "@/lib/actions/admin/companies";
+import { companyBillTo, type Company } from "@/lib/companies";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dropdown } from "@/components/ui/dropdown";
 import { padDate } from "@/lib/delivery-notes";
@@ -39,7 +41,7 @@ export function PadDropdown(props: React.ComponentProps<typeof Dropdown>) {
   return <Dropdown {...props} className={cn(padTrigger, props.className)} />;
 }
 
-type Suggest<T> = {
+export type Suggest<T> = {
   search: (q: string) => Promise<T[]>;
   renderItem: (item: T) => ReactNode;
   itemKey: (item: T) => string;
@@ -49,7 +51,7 @@ type Suggest<T> = {
  * Suggestions from the database for whatever is typed, a moment after the last key, under the input `anchor`.
  * Used by the search bars on the pads.
  */
-function useSuggestions<T>(search: (q: string) => Promise<T[]>, query: string, open: boolean, anchor: React.RefObject<HTMLInputElement | null>, minWidth: number) {
+export function useSuggestions<T>(search: (q: string) => Promise<T[]>, query: string, open: boolean, anchor: React.RefObject<HTMLInputElement | null>, minWidth: number) {
   // Results remember which query they answer, so a list for an earlier query is never shown or picked from.
   const [found, setFound] = useState<{ q: string; items: T[] }>({ q: "", items: [] });
   const [active, setActive] = useState(0);
@@ -107,7 +109,7 @@ function useSuggestions<T>(search: (q: string) => Promise<T[]>, query: string, o
   return { results, loading, active, setActive, place, keys };
 }
 
-function SuggestionList<T>({
+export function SuggestionList<T>({
   id,
   s,
   renderItem,
@@ -283,6 +285,45 @@ export function CustomerBox({
       />
       <AddressLines lines={addressBlock(shown)} skipFirst />
       {orphan && !customer && <p className="mt-1 font-sans text-xs italic text-stone-500">Removed from the list. Search for another to change it.</p>}
+    </>
+  );
+}
+
+/** The Invoice To box when the invoice is for a company: search companies, their address fills in underneath. */
+export function CompanyBox({ company, onChange, onAdd, orphan }: { company: Company | null; onChange: (c: Company) => void; onAdd: () => void; orphan?: BillTo | null }) {
+  const shown = company ? companyBillTo(company) : orphan;
+  return (
+    <>
+      <PadSearch
+        search={searchCompanies}
+        onPick={onChange}
+        itemKey={(c) => c.id}
+        display={shown?.full_name}
+        placeholder="Search companies by name"
+        label="Invoice to: search companies"
+        className="-ml-1 w-[calc(100%+0.5rem)] text-[15px] font-semibold"
+        renderItem={(c) => (
+          <>
+            <span className={cn("block truncate text-[0.95rem] text-ink", c.id === company?.id && "font-medium text-aubergine-800")}>{c.name}</span>
+            <span className="block truncate text-sm text-ink-soft">{[c.city, c.postcode, c.phone].filter(Boolean).join(" · ") || "No address yet"}</span>
+          </>
+        )}
+        empty={(q) => (q ? `No company matches \u201c${q}\u201d.` : "No companies yet.")}
+        footer={(close) => (
+          <button
+            type="button"
+            onClick={() => {
+              close();
+              onAdd();
+            }}
+            className="text-sm text-aubergine-700 underline-offset-2 hover:underline"
+          >
+            + Add a new company
+          </button>
+        )}
+      />
+      <AddressLines lines={addressBlock(shown)} skipFirst />
+      {orphan && !company && <p className="mt-1 font-sans text-xs italic text-stone-500">Removed from the list. Search for another to change it.</p>}
     </>
   );
 }

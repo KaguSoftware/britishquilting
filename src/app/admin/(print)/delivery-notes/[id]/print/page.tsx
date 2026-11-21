@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { staffDb } from "@/lib/actions/admin/guard";
 import { formatPence } from "@/lib/utils";
 import { addressBlock } from "@/lib/invoices";
-import { deliveryNoteNo, padDate, padLineText, type DeliveryNote } from "@/lib/delivery-notes";
+import { deliveryNoteNo, deliveryTotal, linesByPlace, padDate, padLineText, type DeliveryNote } from "@/lib/delivery-notes";
+import { manualInvoiceNo } from "@/lib/invoices";
 import { DeliveryNoteDocument, SHEET_ID } from "@/components/admin/delivery-notes/delivery-note-document";
 import { DocumentToolbar } from "@/components/admin/documents/document-toolbar";
 import { docAction } from "@/lib/doc-action";
@@ -27,6 +28,11 @@ export default async function DeliveryNotePrintPage({ params, searchParams }: { 
   if (!data) notFound();
   const note = data as DeliveryNote;
   const invoiceTo = addressBlock(note.invoice_to);
+  const { data: invoice } = note.invoice_id ? await db.from("invoices").select("number").eq("id", note.invoice_id).maybeSingle() : { data: null };
+  // Older notes have one place made from their Deliver To box.
+  const destinations = note.destinations?.length ? note.destinations : [{ label: "", address: note.deliver_to ?? "", items: [] }];
+  const grouped = linesByPlace(note.items, destinations.length);
+  const priced = note.items.some((l) => l.amount_pence != null);
 
   return (
     <DeliveryNoteDocument
@@ -39,14 +45,18 @@ export default async function DeliveryNotePrintPage({ params, searchParams }: { 
         poNumber: note.po_number,
         reference: note.reference,
         invoiceTo,
-        deliverTo: (note.deliver_to ?? "").split("\n").filter((l) => l.trim()),
-        lines: note.items.map((l, i) => ({
-          key: String(i),
-          quantity: l.quantity,
-          description: padLineText(l, formatPence),
-          amount: l.amount_pence != null ? formatPence(l.amount_pence) : null,
+        places: destinations.map((d, i) => ({
+          label: d.label,
+          deliverTo: (d.address ?? "").split("\n").filter((l) => l.trim()),
+          lines: grouped[i].map((l, j) => ({
+            key: `${i}-${j}`,
+            quantity: l.quantity,
+            description: padLineText(l, formatPence),
+            amount: l.amount_pence != null ? formatPence(l.amount_pence) : null,
+          })),
+          total: priced ? formatPence(deliveryTotal(grouped[i])) : null,
         })),
-        total: note.items.some((l) => l.amount_pence != null) ? formatPence(note.total_pence) : null,
+        total: priced ? { label: invoice ? `Total, invoice ${manualInvoiceNo(invoice.number)}` : "Total", amount: formatPence(note.total_pence) } : null,
         note: note.note,
       }}
     />

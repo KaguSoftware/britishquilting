@@ -2,17 +2,17 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
-import { IconCalendar, IconChevronDown, IconSpinner } from "@/components/icons";
+import { IconCalendar, IconChevronDown, IconChevronLeft, IconChevronRight, IconSpinner } from "@/components/icons";
 import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
-import type { PeriodKey } from "@/lib/finance/calc";
+import { londonDay, type PeriodKey } from "@/lib/finance/calc";
 import { Button, Field } from "../ui";
 import { Modal } from "../controls";
 
 const OPTIONS: { key: PeriodKey; label: string; hint: string }[] = [
   { key: "month", label: "This month", hint: "From the 1st to today" },
   { key: "last_month", label: "Last month", hint: "The whole of last month" },
-  { key: "quarter", label: "This quarter", hint: "The current three months, for VAT returns" },
+  { key: "quarter", label: "Quarter", hint: "Three months, for VAT returns. Use the arrows for earlier quarters" },
   { key: "year", label: "This year", hint: "1 January to 31 December" },
   { key: "tax_year", label: "Tax year", hint: "6 April to 5 April, for Self Assessment" },
   { key: "custom", label: "Choose dates", hint: "Any range you like" },
@@ -26,6 +26,9 @@ export function PeriodPicker({
   to,
   onQuickSelect,
   quickPending,
+  onStep,
+  canStepForward,
+  onPickQuarter,
 }: {
   current: PeriodKey;
   label: string;
@@ -36,6 +39,11 @@ export function PeriodPicker({
   onQuickSelect?: (key: Exclude<PeriodKey, "custom">) => void;
   /** Set by the caller while an uncached quick-pick is still loading, so the trigger button's spinner reflects it too. */
   quickPending?: boolean;
+  /** Step to the period before (-1) or after (+1); shown as arrows either side of the period. */
+  onStep?: (dir: -1 | 1) => void;
+  canStepForward?: boolean;
+  /** When showing a quarter: jump straight to any quarter of the year. */
+  onPickQuarter?: (year: number, q: number) => void;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -66,10 +74,30 @@ export function PeriodPicker({
     start(() => router.push(`/admin/finance?${q.toString()}`, { scroll: false }));
   };
 
+  const fromYear = Number(from.slice(0, 4));
+  const fromQ = Math.floor((Number(from.slice(5, 7)) - 1) / 3) + 1;
+  const today = londonDay(new Date());
+  const nowQ = Math.floor((today.m - 1) / 3) + 1;
+  const arrow =
+    "grid size-12 shrink-0 place-items-center rounded-sm border border-stone-300 bg-cream-50 text-aubergine-800 transition-colors hover:border-aubergine-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-stone-300 disabled:hover:bg-cream-50";
+
   return (
     <>
-    <div className="sticky top-[73px] z-30 -mx-4 mb-8 border-b border-ink/15 bg-cream-100/95 px-4 py-3 sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-10 lg:px-10">
-      <div className="mx-auto flex max-w-[1240px] items-center gap-3">
+    <div
+      className="sticky top-[73px] z-30 -mx-4 mb-8 border-b border-ink/15 bg-cream-100/95 px-4 py-3 sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-10 lg:px-10"
+      onKeyDown={(e) => {
+        // Left and right arrow keys step while the bar has focus.
+        if (!onStep || (e.target as HTMLElement).closest("input, textarea, [role=dialog]")) return;
+        if (e.key === "ArrowLeft") onStep(-1);
+        else if (e.key === "ArrowRight" && canStepForward) onStep(1);
+      }}
+    >
+      <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-3">
+        {onStep && (
+          <button type="button" onClick={() => onStep(-1)} className={arrow} aria-label={`Show the period before ${label}`} title="Earlier (left arrow key)">
+            <IconChevronLeft className="size-5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -83,6 +111,18 @@ export function PeriodPicker({
           </span>
           {pending ? <IconSpinner className="size-4 text-stone-500" /> : <IconChevronDown className="size-4 text-stone-500" />}
         </button>
+        {onStep && (
+          <button
+            type="button"
+            onClick={() => onStep(1)}
+            disabled={!canStepForward}
+            className={arrow}
+            aria-label={`Show the period after ${label}`}
+            title={canStepForward ? "Later (right arrow key)" : "This is the latest"}
+          >
+            <IconChevronRight className="size-5" />
+          </button>
+        )}
         <div className="hidden flex-wrap gap-1 lg:flex">
           {OPTIONS.filter((o) => o.key !== "custom").map((o) => (
             <button
@@ -98,6 +138,33 @@ export function PeriodPicker({
             </button>
           ))}
         </div>
+        {onPickQuarter && (
+          <div className="flex w-full items-stretch border-t border-ink/10 pt-3 lg:w-auto lg:border-t-0 lg:pt-0 xl:ml-auto" role="group" aria-label={`Quarters of ${fromYear}`}>
+            <span className="mr-3 self-center font-display text-lg tabular-nums text-aubergine-900">{fromYear}</span>
+            {[1, 2, 3, 4].map((q) => {
+              const future = fromYear > today.y || (fromYear === today.y && q > nowQ);
+              const on = q === fromQ;
+              const months = ["Jan to Mar", "Apr to Jun", "Jul to Sep", "Oct to Dec"][q - 1];
+              return (
+                <button
+                  key={q}
+                  type="button"
+                  disabled={future}
+                  onClick={() => onPickQuarter(fromYear, q)}
+                  aria-pressed={on}
+                  className={cn(
+                    "flex-1 border-y border-l border-stone-300 px-3 py-1.5 text-left transition-colors last:border-r first:rounded-l-sm last:rounded-r-sm lg:flex-none",
+                    on ? "bg-aubergine-800 text-cream-50" : "bg-cream-50 text-ink hover:bg-white",
+                    future && "cursor-not-allowed text-stone-500/60 hover:bg-cream-50",
+                  )}
+                >
+                  <span className="block text-sm font-medium tabular-nums">Q{q}</span>
+                  <span className={cn("block text-[0.7rem]", on ? "text-cream-100/80" : "text-stone-500")}>{months}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
 

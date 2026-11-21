@@ -15,19 +15,45 @@ export type ManualCustomer = {
   number: number;
   full_name: string;
   company: string | null;
+  /** The company record this customer belongs to; `company` mirrors its name. */
+  company_id: string | null;
   email: string | null;
   phone: string | null;
   alt_phone: string | null;
   gender: Gender | null;
   /** Date of birth, YYYY-MM-DD. */
   dob: string | null;
+  is_student: boolean;
   line1: string | null;
   line2: string | null;
   city: string | null;
   county: string | null;
   postcode: string | null;
+} & AltAddress & {
   note: string | null;
 };
+
+/** The optional second address on customers and companies. */
+export type AltAddress = {
+  alt_line1: string | null;
+  alt_line2: string | null;
+  alt_city: string | null;
+  alt_county: string | null;
+  alt_postcode: string | null;
+};
+
+export const ALT_ADDRESS_KEYS = ["alt_line1", "alt_line2", "alt_city", "alt_county", "alt_postcode"] as const;
+
+/** The second address as lines, or nothing at all when it hasn't been filled in (so it isn't shown). */
+export function altAddressLines(a: Partial<AltAddress> | null | undefined): string[] {
+  if (!a || !a.alt_line1?.trim()) return [];
+  return [a.alt_line1, a.alt_line2, a.alt_city, a.alt_county, a.alt_postcode].filter((x): x is string => Boolean(x && x.trim()));
+}
+
+/** The second address in the same shape as the first, for filling a Deliver To box. */
+export function altAddressAsBillTo(a: Partial<AltAddress> | null | undefined) {
+  return { line1: a?.alt_line1 ?? null, line2: a?.alt_line2 ?? null, city: a?.alt_city ?? null, county: a?.alt_county ?? null, postcode: a?.alt_postcode ?? null };
+}
 
 export type InvoiceLine = {
   /** Product code, optional. */
@@ -40,7 +66,9 @@ export type InvoiceLine = {
 };
 
 /** The customer as copied onto an invoice or delivery note. Older copies have no number. */
-export type BillTo = Omit<ManualCustomer, "id" | "note" | "number" | "alt_phone" | "gender" | "dob"> & { number?: number | null };
+export type BillTo = Omit<ManualCustomer, "id" | "note" | "number" | "alt_phone" | "gender" | "dob" | "is_student" | "company_id" | keyof AltAddress> & {
+  number?: number | null;
+};
 
 /** Every customer's ID, whether added by hand, with an account or a guest: CID-1001. */
 export const customerNo = (n: number) => `CID-${n}`;
@@ -55,6 +83,7 @@ export type ManualInvoice = {
   id: string;
   number: number;
   customer_id: string | null;
+  company_id: string | null;
   bill_to: BillTo;
   items: InvoiceLine[];
   total_pence: number;

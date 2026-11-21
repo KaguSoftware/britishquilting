@@ -101,6 +101,11 @@ export async function getStoreSettings() {
     bank_details: string | null;
     low_stock_email: string | null;
     announcement: string | null;
+    birthday_enabled: boolean;
+    birthday_kind: "percent" | "fixed";
+    birthday_value: number;
+    birthday_days: number;
+    birthday_min_subtotal_pence: number;
   };
 }
 

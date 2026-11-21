@@ -89,7 +89,7 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
   const input = parsed.data;
 
   try {
-    const { q, viewer, settings, discount, discountError } = await computeQuote({
+    const { q, viewer, settings, discount, discountError, birthday } = await computeQuote({
       lines: input.lines,
       fulfilment: input.fulfilment,
       rateId: input.rateId,
@@ -187,6 +187,7 @@ export async function createOrder(raw: CheckoutInput): Promise<CreateOrderResult
           vat_included_pence: q.vat,
           vat_rate: q.vatRate,
           discount_code: discount?.code ?? null,
+          birthday_year: birthday?.applied ? birthday.year : null,
           customer_note: input.note || null,
         })
         .select("id, number, access_token, total_pence, vat_included_pence, payment_provider, payment_ref")
