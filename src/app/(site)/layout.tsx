@@ -13,7 +13,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         Skip to content
       </a>
       <SmoothScroll />
-      <Announcement message={settings?.announcement} />
+      <Announcement messages={settings?.announcement_messages?.length ? settings.announcement_messages : settings?.announcement ? [settings.announcement] : []} together={settings?.announcement_rotate ?? true} />
       <Header />
       <main id="main">{children}</main>
       <Footer />

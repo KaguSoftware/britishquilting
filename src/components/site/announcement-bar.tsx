@@ -1,29 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { IconClose } from "@/components/icons";
+import { Fragment, useEffect, useRef } from "react";
+import { Marquee } from "./marquee";
 
 const setOffset = (px: number) => document.documentElement.style.setProperty("--announce-offset", `${Math.max(0, px)}px`);
 
-export function AnnouncementBar({ message, storageKey }: { message: string; storageKey: string }) {
+export function AnnouncementBar({ messages, together }: { messages: string[]; together: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    let hidden = false;
-    try {
-      hidden = localStorage.getItem(storageKey) === message;
-    } catch {
-      /* storage blocked: just show it */
-    }
-    if (hidden) {
-      setDismissed(true);
-      setOffset(0);
-      return;
-    }
     const el = ref.current;
     if (!el) return;
-    el.hidden = false;
     const update = () => setOffset(el.offsetHeight - window.scrollY);
     update();
     const ro = new ResizeObserver(update);
@@ -33,41 +20,29 @@ export function AnnouncementBar({ message, storageKey }: { message: string; stor
       ro.disconnect();
       window.removeEventListener("scroll", update);
     };
-  }, [message, storageKey]);
-
-  if (dismissed) return null;
+  }, []);
 
   return (
     <div
       ref={ref}
-      suppressHydrationWarning
       role="region"
       aria-label="Store announcement"
-      className="relative z-[51] border-b border-cream-50/10 bg-aubergine-950 text-cream-100"
+      className="relative z-[51] animate-announce-pulse border-b border-cream-50/10 bg-aubergine-950 text-cream-100"
     >
-      <div className="mx-auto flex h-9 max-w-7xl items-center justify-center px-11 md:px-12">
-        <p className="truncate text-center text-[0.8rem] tracking-[0.01em] md:text-[0.85rem]" title={message}>
-          <span aria-hidden className="mr-2 hidden h-px md:inline-block w-4 translate-y-[-0.28em] border-t border-dashed border-gold-500/80" />
-          {message}
-          <span aria-hidden className="ml-2 hidden h-px md:inline-block w-4 translate-y-[-0.28em] border-t border-dashed border-gold-500/80" />
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            try {
-              localStorage.setItem(storageKey, message);
-            } catch {
-              /* ignore */
-            }
-            setOffset(0);
-            setDismissed(true);
-          }}
-          aria-label="Dismiss announcement"
-          className="absolute right-1 top-1/2 grid size-9 -translate-y-1/2 place-items-center text-cream-100/60 transition-colors hover:text-cream-50 md:right-3"
-        >
-          <IconClose className="size-4" />
-        </button>
-      </div>
+      {together ? (
+        <div className="mx-auto flex h-9 max-w-7xl items-center justify-center overflow-hidden px-4 md:px-12">
+          <p className="flex items-center whitespace-nowrap text-[0.8rem] tracking-[0.01em] md:text-[0.85rem]">
+            {messages.map((m, i) => (
+              <Fragment key={i}>
+                {i > 0 && <span aria-hidden className="mx-4 inline-block h-px w-5 shrink-0 translate-y-[-0.28em] border-t border-dashed border-gold-500/80 md:mx-6" />}
+                <span>{m}</span>
+              </Fragment>
+            ))}
+          </p>
+        </div>
+      ) : (
+        <Marquee messages={messages} className="h-9 items-center text-[0.8rem] tracking-[0.01em] md:text-[0.85rem]" />
+      )}
     </div>
   );
 }

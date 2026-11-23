@@ -18,7 +18,8 @@ export default async function SettingsPage() {
           invoice_terms_days: String(data?.invoice_terms_days ?? 30),
           bank_details: data?.bank_details ?? "",
           low_stock_email: data?.low_stock_email ?? "",
-          announcement: data?.announcement ?? "",
+          announcement_messages: data?.announcement_messages?.length ? data.announcement_messages : data?.announcement ? [data.announcement] : [],
+          announcement_rotate: data?.announcement_rotate ?? true,
         }}
       />
     </div>

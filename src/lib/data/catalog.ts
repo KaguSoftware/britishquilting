@@ -101,6 +101,8 @@ export async function getStoreSettings() {
     bank_details: string | null;
     low_stock_email: string | null;
     announcement: string | null;
+    announcement_messages: string[] | null;
+    announcement_rotate: boolean | null;
     birthday_enabled: boolean;
     birthday_kind: "percent" | "fixed";
     birthday_value: number;

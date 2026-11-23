@@ -52,7 +52,8 @@ const settingsSchema = z.object({
   invoice_terms_days: z.number().int().min(0).max(120),
   bank_details: z.string().trim().max(1000).nullable(),
   low_stock_email: z.union([z.email(), z.literal("")]).nullable(),
-  announcement: z.string().trim().max(200).nullable(),
+  announcement_messages: z.array(z.string().trim().max(200)).max(10).default([]),
+  announcement_rotate: z.boolean().default(true),
 });
 
 export type SettingsInput = z.input<typeof settingsSchema>;
@@ -71,7 +72,8 @@ export async function saveSettings(input: SettingsInput): Promise<ActionResult> 
     collection_hours: d.collection_hours || null,
     bank_details: d.bank_details || null,
     low_stock_email: d.low_stock_email || null,
-    announcement: d.announcement || null,
+    announcement_messages: d.announcement_messages.filter(Boolean),
+    announcement: d.announcement_messages.find(Boolean) || null,
     updated_at: new Date().toISOString(),
   };
   const { error } = await db.from("store_settings").update(row).eq("id", 1);

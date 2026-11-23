@@ -39,6 +39,15 @@
   --shadow-lift: 0 2px 4px rgb(28 10 36 / 0.05), 0 24px 48px -16px rgb(28 10 36 / 0.25);
   --shadow-glow: 0 0 0 1px rgb(201 164 92 / 0.45), 0 0 32px -6px rgb(201 164 92 / 0.55), 0 12px 32px -14px rgb(74 29 92 / 0.45);
 
+  --animate-marquee: marquee 30s linear infinite;
+  @keyframes marquee {
+    to { transform: translateX(-50%); }
+  }
+  --animate-announce-pulse: announce-pulse 7s var(--ease-drape) infinite;
+  @keyframes announce-pulse {
+    0%, 62%, 100% { box-shadow: 0 2px 6px -3px rgb(201 164 92 / 0), inset 0 -1px 0 0 rgb(201 164 92 / 0); }
+    80% { box-shadow: 0 2px 6px -3px rgb(201 164 92 / 0.45), inset 0 -1px 0 0 rgb(226 204 152 / 0.55); }
+  }
   --animate-announce-glow: announce-glow 3.6s var(--ease-drape) infinite;
   @keyframes announce-glow {
     0%, 100% { box-shadow: 0 0 0 1px rgb(201 164 92 / 0.55), 0 0 18px -4px rgb(201 164 92 / 0.45); }
@@ -144,3 +153,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Date/time inputs must never appear; DatePicker replaces them */
 input::-webkit-calendar-picker-indicator { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-announce-pulse { animation: none; }
+}
